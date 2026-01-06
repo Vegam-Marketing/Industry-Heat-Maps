@@ -1,0 +1,3418 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CRM Analytics Dashboard - Multi-Industry</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+    <script src="https://unpkg.com/topojson-client@3"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: var(--bg-color, #f0f4f8);
+            color: #333;
+            transition: background 0.3s ease;
+        }
+
+        :root {
+            --primary-color: #2c3e50;
+            --secondary-color: #34495e;
+            --highlight-color: #ecf0f1;
+            --bg-color: #f5f6fa;
+        }
+
+        .container {
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+        }
+
+        .header {
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+            color: white;
+            padding: 20px 30px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.2);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: background 0.3s ease;
+        }
+
+        .header-left { flex: 1; }
+
+        .header h1 {
+            font-size: 28px;
+            margin-bottom: 5px;
+            font-weight: 600;
+        }
+
+        .header p {
+            font-size: 14px;
+            opacity: 0.95;
+        }
+
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .industry-selector {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .industry-selector label {
+            font-size: 14px;
+            font-weight: 500;
+            opacity: 0.9;
+        }
+
+        .industry-dropdown {
+            padding: 10px 40px 10px 15px;
+            font-size: 15px;
+            border: 2px solid rgba(255,255,255,0.3);
+            border-radius: 8px;
+            background: rgba(255,255,255,0.15);
+            color: white;
+            cursor: pointer;
+            min-width: 220px;
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='white' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10l-5 5z'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 12px center;
+            transition: all 0.2s;
+        }
+
+        .industry-dropdown:hover {
+            background: rgba(255,255,255,0.25);
+            border-color: rgba(255,255,255,0.5);
+        }
+
+        .industry-dropdown:focus {
+            outline: none;
+            border-color: white;
+        }
+
+        .industry-dropdown option {
+            background: #333;
+            color: white;
+            padding: 10px;
+        }
+
+        .tabs {
+            background: white;
+            border-bottom: 2px solid #e0e0e0;
+            padding: 0;
+            display: flex;
+            height: 50px;
+        }
+
+        .tab-button {
+            flex: 1;
+            border: none;
+            background: white;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            color: #666;
+            transition: all 0.3s;
+            border-bottom: 3px solid transparent;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .tab-button:hover {
+            background: var(--highlight-color);
+            color: var(--primary-color);
+        }
+
+        .tab-button.active {
+            color: var(--primary-color);
+            border-bottom-color: var(--secondary-color);
+            background: var(--highlight-color);
+        }
+
+        .content {
+            flex: 1;
+            overflow: hidden;
+            display: flex;
+        }
+
+        .tab-content {
+            display: none;
+            flex: 1;
+            overflow: auto;
+            width: 100%;
+        }
+
+        .tab-content.active {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .charts-container {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            padding: 20px;
+            width: 100%;
+	    height: 500px;
+            overflow-y: auto;
+        }
+
+        .chart-wrapper {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            padding: 20px;
+            flex: 1;
+            min-height: 400px;
+            position: relative;
+        }
+
+        .chart-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--primary-color);
+            margin-bottom: 15px;
+            border-bottom: 2px solid #e0e0e0;
+            padding-bottom: 10px;
+            transition: color 0.3s;
+        }
+
+        canvas {
+            max-height: 100%;
+            width: 100% !important;
+        }
+
+        .heatmap-container {
+            display: flex;
+            gap: 20px;
+            padding: 20px;
+            width: 100%;
+        }
+
+        .map-section {
+            flex: 1;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .state {
+            stroke: white;
+            stroke-width: 1;
+            cursor: pointer;
+            transition: filter 0.2s;
+        }
+
+        .state:hover {
+            filter: brightness(0.85);
+            stroke-width: 2;
+            stroke: #ff9800;
+        }
+
+        .heatmap-legend {
+            width: 300px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .legend-section {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .legend-title {
+            font-weight: 600;
+            color: var(--primary-color);
+            font-size: 13px;
+            text-transform: uppercase;
+            border-bottom: 2px solid #e0e0e0;
+            padding-bottom: 8px;
+            transition: color 0.3s;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+        }
+
+        .legend-color {
+            width: 16px;
+            height: 16px;
+            border-radius: 3px;
+            border: 1px solid #999;
+        }
+
+        .zoom-btn {
+            background: white;
+            border: 2px solid var(--secondary-color);
+            color: var(--primary-color);
+            width: 36px;
+            height: 36px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+            font-weight: 600;
+        }
+
+        .zoom-btn:hover {
+            background: var(--highlight-color);
+            transform: scale(1.05);
+        }
+
+        .stats-box {
+            background: var(--highlight-color);
+            padding: 12px;
+            border-left: 4px solid var(--secondary-color);
+            border-radius: 4px;
+            font-size: 12px;
+            transition: all 0.3s;
+        }
+
+        .tooltip {
+            position: fixed;
+            padding: 12px;
+            background: rgba(0, 0, 0, 0.9);
+            color: white;
+            border-radius: 4px;
+            font-size: 12px;
+            pointer-events: none;
+            z-index: 999;
+            display: none;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+        }
+
+        .state-list {
+            max-height: 350px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .state-item {
+            padding: 8px;
+            background: #fafafa;
+            border-left: 3px solid var(--secondary-color);
+            border-radius: 3px;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 12px;
+        }
+
+        .state-item:hover {
+            background: var(--highlight-color);
+            transform: translateX(2px);
+        }
+
+        .state-item strong {
+            display: block;
+            color: var(--primary-color);
+            margin-bottom: 2px;
+        }
+
+        .state-item small { color: #666; }
+
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 2000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            animation: fadeIn 0.3s;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        .modal.active {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-content {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.25);
+            max-width: 600px;
+            width: 90%;
+            max-height: 90vh;
+            overflow-y: auto;
+            animation: slideUp 0.3s;
+        }
+
+        @keyframes slideUp {
+            from { transform: translateY(50px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+
+        .modal-header {
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+            color: white;
+            padding: 25px;
+            border-radius: 12px 12px 0 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .modal-header h2 {
+            font-size: 24px;
+            margin: 0;
+        }
+
+        .modal-close {
+            background: rgba(255, 255, 255, 0.2);
+            border: none;
+            color: white;
+            font-size: 28px;
+            cursor: pointer;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.2s;
+        }
+
+        .modal-close:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        .modal-body { padding: 25px; }
+
+        .state-summary {
+            background: var(--highlight-color);
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            border-left: 4px solid var(--secondary-color);
+        }
+
+        .summary-stat {
+            display: flex;
+            justify-content: space-between;
+            padding: 5px 0;
+            font-size: 14px;
+        }
+
+        .summary-stat strong { color: var(--primary-color); }
+
+        .accounts-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--primary-color);
+            margin-bottom: 15px;
+            border-bottom: 2px solid #e0e0e0;
+            padding-bottom: 10px;
+        }
+
+        .account-card {
+            background: #fafafa;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 12px;
+            border-left: 4px solid var(--secondary-color);
+            transition: all 0.2s;
+        }
+
+        .account-card:hover {
+            background: var(--highlight-color);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .account-name {
+            font-weight: 600;
+            color: var(--primary-color);
+            font-size: 14px;
+            margin-bottom: 8px;
+        }
+
+        .account-details {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            font-size: 12px;
+        }
+
+        .detail-item {
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .detail-label {
+            color: #666;
+            font-weight: 500;
+        }
+
+        .detail-value {
+            color: var(--primary-color);
+            font-weight: 600;
+        }
+
+        .svg-container {
+            flex: 1;
+            overflow: visible;
+            display: flex;
+            align-items: flex-start;
+            justify-content: center;
+        }
+
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(255,255,255,0.9);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 3000;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s;
+        }
+
+        .loading-overlay.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .loading-spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid #e0e0e0;
+            border-top-color: var(--primary-color);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Summary Page Styles */
+        .summary-content {
+            padding: 20px;
+            overflow-y: auto;
+        }
+
+        .summary-header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .summary-header h2 {
+            font-size: 24px;
+            color: #2c3e50;
+            margin-bottom: 10px;
+        }
+
+        .summary-header p {
+            color: #666;
+            font-size: 14px;
+        }
+
+        .summary-stats-row {
+            display: grid;
+            grid-template-columns: repeat(6, 1fr);
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+
+        .summary-stat-card {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            text-align: center;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            border-top: 4px solid;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .summary-stat-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.15);
+        }
+
+        .summary-stat-card .icon {
+            font-size: 28px;
+            margin-bottom: 10px;
+        }
+
+        .summary-stat-card .label {
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 5px;
+            font-weight: 500;
+        }
+
+        .summary-stat-card .value {
+            font-size: 24px;
+            font-weight: 700;
+        }
+
+        .summary-stat-card .sub-value {
+            font-size: 11px;
+            color: #888;
+            margin-top: 3px;
+        }
+
+        .maps-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            grid-template-rows: repeat(2, 1fr);
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .mini-map-card {
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            overflow: hidden;
+            border-top: 4px solid;
+        }
+
+        .mini-map-header {
+            padding: 12px 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #eee;
+        }
+
+        .mini-map-header h3 {
+            font-size: 14px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .mini-map-header .contact-count {
+            font-size: 12px;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-weight: 600;
+        }
+
+        .mini-map-container {
+            padding: 10px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 200px;
+        }
+
+        .mini-map-container svg {
+            width: 100%;
+            height: 100%;
+        }
+
+        .industry-mix-section {
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            padding: 25px;
+            margin-bottom: 30px;
+        }
+
+        .industry-mix-section h3 {
+            font-size: 18px;
+            color: #2c3e50;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #eee;
+        }
+
+        .industry-mix-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+        }
+
+        .chart-container {
+            height: 400px;
+        }
+
+        .top-states-table {
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            padding: 25px;
+        }
+
+        .top-states-table h3 {
+            font-size: 18px;
+            color: #2c3e50;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #eee;
+        }
+
+        .states-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .states-table th {
+            background: #f8f9fa;
+            padding: 12px;
+            text-align: left;
+            font-size: 12px;
+            font-weight: 600;
+            color: #666;
+            border-bottom: 2px solid #eee;
+        }
+
+        .states-table td {
+            padding: 12px;
+            border-bottom: 1px solid #eee;
+            font-size: 13px;
+        }
+
+        .states-table tr:hover {
+            background: #f8f9fa;
+        }
+
+        .industry-bar {
+            display: flex;
+            height: 20px;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .industry-bar-segment {
+            height: 100%;
+            transition: width 0.3s;
+        }
+
+        .rank-badge {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            background: #2c3e50;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            font-size: 12px;
+        }
+
+        .rank-badge.gold { background: #f39c12; }
+        .rank-badge.silver { background: #95a5a6; }
+        .rank-badge.bronze { background: #cd6133; }
+
+        @media (max-width: 1400px) {
+            .maps-grid {
+                grid-template-columns: repeat(2, 1fr);
+                grid-template-rows: repeat(3, 1fr);
+            }
+            .summary-stats-row {
+                grid-template-columns: repeat(3, 1fr);
+            }
+        }
+
+        @media (max-width: 900px) {
+            .maps-grid {
+                grid-template-columns: 1fr;
+            }
+            .summary-stats-row {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            .industry-mix-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 1200px) {
+            .heatmap-container {
+                flex-direction: column;
+            }
+            .heatmap-legend {
+                width: 100%;
+            }
+            .header {
+                flex-direction: column;
+                gap: 15px;
+            }
+            .header-right {
+                width: 100%;
+                justify-content: flex-end;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="loading-spinner"></div>
+    </div>
+
+    <div class="container">
+        <div class="header">
+            <div class="header-left">
+                <h1 id="dashboardTitle">📊 CRM Analytics Dashboard</h1>
+                <p id="dashboardDesc">Select an industry to view interactive analytics or view Summary for all industries</p>
+            </div>
+            <div class="header-right">
+                <div class="industry-selector">
+                    <label for="industrySelect">View:</label>
+                    <select id="industrySelect" class="industry-dropdown" onchange="switchIndustry(this.value)">
+                        <option value="summary">📊 Summary (All Industries)</option>
+                        <option value="banking">🏦 Banking</option>
+                        <option value="manufacturing">🏭 Manufacturing</option>
+                        <option value="food_beverage">🍔 Food & Beverage</option>
+                        <option value="hospice">🏥 Hospice & Nursing</option>
+                        <option value="law">⚖️ Law Firms</option>
+                        <option value="fleet">🚛 Fleet Operators</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <div class="tabs" id="industryTabs" style="display: none;">
+            <button class="tab-button active" onclick="switchTab('charts')">
+                📈 Seniority Distribution Chart
+            </button>
+            <button class="tab-button" onclick="switchTab('heatmap')">
+                🗺️ State Heat Map
+            </button>
+        </div>
+
+        <!-- Summary Page -->
+        <div id="summary" class="tab-content active">
+            <div class="summary-content">
+                <div class="summary-header">
+                    <h2>🌐 All Industries Overview</h2>
+                    <p>Compare lead density across all 6 industries to identify optimal sales team placement</p>
+                </div>
+
+                <!-- Stats Cards Row -->
+                <div class="summary-stats-row" id="summaryStatsRow"></div>
+
+                <!-- 2x3 Grid of Mini Maps -->
+                <div class="maps-grid" id="mapsGrid"></div>
+
+                <!-- Industry Mix Charts -->
+                <div class="industry-mix-section">
+                    <h3>📊 Industry Mix Analysis</h3>
+                    <div class="industry-mix-grid">
+                        <div class="chart-container">
+                            <canvas id="totalContactsChart"></canvas>
+                        </div>
+                        <div class="chart-container">
+                            <canvas id="topStatesChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Top States Table -->
+                <div class="top-states-table">
+                    <h3>🏆 Top 15 States by Total Leads (All Industries)</h3>
+                    <table class="states-table">
+                        <thead>
+                            <tr>
+                                <th>Rank</th>
+                                <th>State</th>
+                                <th>Total Contacts</th>
+                                <th>Industry Breakdown</th>
+                                <th>Banking</th>
+                                <th>Mfg</th>
+                                <th>F&B</th>
+                                <th>Healthcare</th>
+                                <th>Law</th>
+                                <th>Fleet</th>
+                            </tr>
+                        </thead>
+                        <tbody id="topStatesTableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Individual Industry Views -->
+        <div id="charts" class="tab-content">
+            <div class="charts-container">
+                <div class="chart-wrapper">
+                    <div class="chart-title">Seniority Level Distribution by State (%)</div>
+                    <canvas id="seniorityChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <div id="heatmap" class="tab-content">
+            <div class="heatmap-container">
+                <div class="map-section">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                        <div class="chart-title" style="margin-bottom: 0; flex: 1;">Contact Density Heat Map - All States (Click to see top accounts)</div>
+                        <div style="display: flex; gap: 8px;">
+                            <button id="zoomInBtn" class="zoom-btn" onclick="zoomMapIn()" title="Zoom In"><strong>+</strong></button>
+                            <button id="zoomOutBtn" class="zoom-btn" onclick="zoomMapOut()" title="Zoom Out"><strong>−</strong></button>
+                            <button id="resetBtn" class="zoom-btn" onclick="resetMap()" title="Reset View">⟲</button>
+                        </div>
+                    </div>
+                    <div class="svg-container">
+                        <svg id="heatmap-svg" viewBox="0 0 960 600" preserveAspectRatio="xMinYMin meet">
+    </svg>
+                    </div>
+                    <div class="tooltip" id="tooltip"></div>
+                </div>
+
+                <div class="heatmap-legend">
+                    <div class="legend-section">
+                        <div class="legend-title">📊 Contact Density</div>
+                        <div id="legendItems"></div>
+                    </div>
+                    <div class="legend-section">
+                        <div class="legend-title" id="topStatesTitle">🏢 Top States</div>
+                        <div class="state-list" id="stateList"></div>
+                    </div>
+                    <div class="stats-box" id="statsBox">
+                        <strong>📈 Dataset Summary:</strong><br>
+                        Loading...
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="stateModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modalStateName">State Name</h2>
+                <button class="modal-close" onclick="closeModal()">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="state-summary" id="stateSummary"></div>
+                <div class="accounts-title" id="accountsTitle">🏆 Top 5 Companies by Contacts</div>
+                <div id="accountsList"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+
+const industryData = {
+    "banking": {
+        label: "🏦 Banking",
+        color1: "#0d47a1",
+        color2: "#1565c0",
+        highlight: "#e3f2fd",
+        bg: "#f0f4f8",
+        description: `Interactive visualization of 2,018 banking IT decision-makers across 701 institutions | Click any state to see top accounts`,
+        stats: `<strong>📈 Dataset Summary:</strong><br>                        2,018 banking IT decision-makers<br>                        701 unique banking institutions<br>                        50 states covered<br>                        44.7% C-Suite | 35.3% VP level`,
+        stateAccountsData: {
+            "California": [
+                {"name": "Banc of California", "contacts": 12, "employees": 2000},
+                {"name": "Bank of Hope", "contacts": 10, "employees": 1300},
+                {"name": "Axos Bank", "contacts": 8, "employees": 1400},
+                {"name": "Pacific Premier Bank", "contacts": 8, "employees": 1400},
+                {"name": "Tri Counties Bank", "contacts": 8, "employees": 1200}
+            ],
+            "Texas": [
+                {"name": "Texas Capital", "contacts": 19, "employees": 1900},
+                {"name": "Federal Reserve Bank of Dallas", "contacts": 8, "employees": 1400},
+                {"name": "American National Bank of Texas", "contacts": 7, "employees": 830},
+                {"name": "Southside Bank", "contacts": 7, "employees": 780},
+                {"name": "Veritex Community Bank", "contacts": 6, "employees": 860}
+            ],
+            "New York": [
+                {"name": "Apple Bank", "contacts": 15, "employees": 2000},
+                {"name": "IDB Bank", "contacts": 11, "employees": 1300},
+                {"name": "Bank of China USA", "contacts": 9, "employees": 430},
+                {"name": "Dime Community Bank", "contacts": 7, "employees": 890},
+                {"name": "Berkshire Bank", "contacts": 6, "employees": 1200}
+            ],
+            "Massachusetts": [
+                {"name": "Rockland Trust", "contacts": 18, "employees": 1900},
+                {"name": "Eastern Bank", "contacts": 16, "employees": 2000},
+                {"name": "Needham Bank", "contacts": 11, "employees": 380},
+                {"name": "Citizens Financial Group, Inc.", "contacts": 10, "employees": 1200},
+                {"name": "Berkshire Bank", "contacts": 5, "employees": 1200}
+            ],
+            "Florida": [
+                {"name": "BankUnited", "contacts": 15, "employees": 1700},
+                {"name": "Seacoast Bank", "contacts": 10, "employees": 1600},
+                {"name": "EverBank", "contacts": 10, "employees": 220},
+                {"name": "MIDFLORIDA Credit Union", "contacts": 8, "employees": 1500},
+                {"name": "City National Bank of Florida", "contacts": 8, "employees": 1000}
+            ],
+            "Pennsylvania": [
+                {"name": "Dollar Bank", "contacts": 14, "employees": 1500},
+                {"name": "Customers Bank", "contacts": 6, "employees": 790},
+                {"name": "Fulton Financial Corporation", "contacts": 5, "employees": 890},
+                {"name": "Orrstown Bank", "contacts": 5, "employees": 610},
+                {"name": "The Bancorp", "contacts": 4, "employees": 780}
+            ],
+            "Illinois": [
+                {"name": "Federal Home Loan Bank of Chicago", "contacts": 20, "employees": 660},
+                {"name": "Old Second National Bank", "contacts": 8, "employees": 880},
+                {"name": "Busey", "contacts": 5, "employees": 2000},
+                {"name": "Byline Bank", "contacts": 5, "employees": 1100},
+                {"name": "First American Bank", "contacts": 5, "employees": 1000}
+            ],
+            "New Jersey": [
+                {"name": "OceanFirst Bank", "contacts": 9, "employees": 980},
+                {"name": "Provident Bank", "contacts": 5, "employees": 1800},
+                {"name": "Kearny Bank", "contacts": 5, "employees": 560},
+                {"name": "Investors Bank", "contacts": 3, "employees": 1600},
+                {"name": "Affinity Federal Credit Union", "contacts": 3, "employees": 460}
+            ],
+            "Washington": [
+                {"name": "Banner Bank", "contacts": 5, "employees": 2000},
+                {"name": "WSECU", "contacts": 5, "employees": 750},
+                {"name": "Numerica Credit Union", "contacts": 4, "employees": 650},
+                {"name": "1st Security Bank of Washington", "contacts": 4, "employees": 570},
+                {"name": "Kitsap Credit Union", "contacts": 4, "employees": 300}
+            ],
+            "Wisconsin": [
+                {"name": "Johnson Financial Group", "contacts": 11, "employees": 1400},
+                {"name": "Tri City National Bank", "contacts": 7, "employees": 520},
+                {"name": "UW Credit Union", "contacts": 4, "employees": 820},
+                {"name": "CCFBank", "contacts": 3, "employees": 210},
+                {"name": "Nicolet National Bank", "contacts": 2, "employees": 960}
+            ],
+            "Hawaii": [
+                {"name": "First Hawaiian Bank", "contacts": 19, "employees": 2000},
+                {"name": "Bank of Hawaii", "contacts": 19, "employees": 1900},
+                {"name": "Central Pacific Bank", "contacts": 7, "employees": 700},
+                {"name": "American Savings Bank", "contacts": 2, "employees": 1200},
+                {"name": "Territorial Savings", "contacts": 2, "employees": 240}
+            ],
+            "Michigan": [
+                {"name": "Independent Bank", "contacts": 9, "employees": 950},
+                {"name": "LMCU", "contacts": 4, "employees": 1800},
+                {"name": "Mercantile Bank", "contacts": 3, "employees": 670},
+                {"name": "Sunflower Bank, N.A.", "contacts": 2, "employees": 1200},
+                {"name": "ChoiceOne Bank", "contacts": 2, "employees": 610}
+            ],
+            "Missouri": [
+                {"name": "Federal Reserve Bank of St. Louis", "contacts": 9, "employees": 1500},
+                {"name": "NBH Bank", "contacts": 4, "employees": 1200},
+                {"name": "Enterprise Bank & Trust", "contacts": 3, "employees": 1300},
+                {"name": "Academy Bank", "contacts": 3, "employees": 570},
+                {"name": "nbkc bank", "contacts": 3, "employees": 460}
+            ],
+            "Indiana": [
+                {"name": "1st Source Bank", "contacts": 4, "employees": 1300},
+                {"name": "Lake City Bank", "contacts": 4, "employees": 650},
+                {"name": "Federal Home Loan Bank of Indianapolis", "contacts": 4, "employees": 360},
+                {"name": "Sallie Mae", "contacts": 3, "employees": 1800},
+                {"name": "Merchants Bank IN", "contacts": 3, "employees": 370}
+            ],
+            "Kansas": [
+                {"name": "Fidelity Bank", "contacts": 7, "employees": 380},
+                {"name": "Capitol Federal Savings Bank", "contacts": 5, "employees": 590},
+                {"name": "Emprise Bank", "contacts": 3, "employees": 450},
+                {"name": "Meritrust Credit Union", "contacts": 3, "employees": 360},
+                {"name": "Credit Union of America", "contacts": 3, "employees": 250}
+            ],
+            "Minnesota": [
+                {"name": "Bremer Bank", "contacts": 6, "employees": 1200},
+                {"name": "Alerus Financial", "contacts": 4, "employees": 1100},
+                {"name": "Highland Bank", "contacts": 3, "employees": 320},
+                {"name": "Deerwood Bank", "contacts": 3, "employees": 280},
+                {"name": "Bridgewater Bank", "contacts": 2, "employees": 420}
+            ],
+            "Maryland": [
+                {"name": "Sandy Spring Bank", "contacts": 7, "employees": 1100},
+                {"name": "Howard Bank", "contacts": 5, "employees": 320},
+                {"name": "Eagle Bank", "contacts": 4, "employees": 680},
+                {"name": "Congressional Bank", "contacts": 3, "employees": 180},
+                {"name": "CFG Bank", "contacts": 3, "employees": 160}
+            ],
+            "Ohio": [
+                {"name": "First Federal Lakewood", "contacts": 4, "employees": 520},
+                {"name": "Civista Bank", "contacts": 3, "employees": 680},
+                {"name": "Premier Bank", "contacts": 3, "employees": 440},
+                {"name": "Heartland Bank", "contacts": 3, "employees": 380},
+                {"name": "CSB Bank", "contacts": 2, "employees": 320}
+            ],
+            "Colorado": [
+                {"name": "FirstBank", "contacts": 5, "employees": 2800},
+                {"name": "Vectra Bank Colorado", "contacts": 4, "employees": 620},
+                {"name": "BBVA USA", "contacts": 3, "employees": 1400},
+                {"name": "Colorado Credit Union", "contacts": 3, "employees": 280},
+                {"name": "Elevations Credit Union", "contacts": 2, "employees": 540}
+            ],
+            "North Carolina": [
+                {"name": "First Citizens Bank", "contacts": 5, "employees": 2400},
+                {"name": "Pinnacle Financial Partners", "contacts": 4, "employees": 1800},
+                {"name": "South State Bank", "contacts": 3, "employees": 1200},
+                {"name": "CresCom Bank", "contacts": 3, "employees": 420},
+                {"name": "First Bank NC", "contacts": 2, "employees": 680}
+            ],
+            "Virginia": [
+                {"name": "Atlantic Union Bank", "contacts": 5, "employees": 1400},
+                {"name": "Bank of Clarke County", "contacts": 4, "employees": 320},
+                {"name": "Cardinal Bank", "contacts": 3, "employees": 580},
+                {"name": "Blue Ridge Bank", "contacts": 3, "employees": 420},
+                {"name": "National Bank of Blacksburg", "contacts": 2, "employees": 280}
+            ],
+            "Tennessee": [
+                {"name": "Pinnacle Financial Partners", "contacts": 5, "employees": 1800},
+                {"name": "First Horizon Bank", "contacts": 4, "employees": 2200},
+                {"name": "Avenue Bank", "contacts": 3, "employees": 380},
+                {"name": "Wilson Bank Holding Company", "contacts": 3, "employees": 520},
+                {"name": "Reliant Bank", "contacts": 2, "employees": 280}
+            ],
+            "South Carolina": [
+                {"name": "South State Bank", "contacts": 4, "employees": 1200},
+                {"name": "CresCom Bank", "contacts": 3, "employees": 420},
+                {"name": "First Citizens Bank", "contacts": 3, "employees": 2400},
+                {"name": "Southern First Bank", "contacts": 2, "employees": 380},
+                {"name": "Conway National Bank", "contacts": 2, "employees": 240}
+            ],
+            "Connecticut": [
+                {"name": "Liberty Bank", "contacts": 5, "employees": 680},
+                {"name": "Webster Bank", "contacts": 4, "employees": 1400},
+                {"name": "Savings Bank of Danbury", "contacts": 3, "employees": 280},
+                {"name": "First County Bank", "contacts": 3, "employees": 320},
+                {"name": "Dime Bank", "contacts": 2, "employees": 240}
+            ],
+            "Utah": [
+                {"name": "Zions Bancorporation", "contacts": 6, "employees": 2400},
+                {"name": "Mountain America Credit Union", "contacts": 4, "employees": 1800},
+                {"name": "America First Credit Union", "contacts": 3, "employees": 2200},
+                {"name": "Cyprus Credit Union", "contacts": 3, "employees": 420},
+                {"name": "Deseret First Credit Union", "contacts": 2, "employees": 380}
+            ],
+            "Kentucky": [
+                {"name": "Republic Bank", "contacts": 4, "employees": 680},
+                {"name": "German American Bank", "contacts": 3, "employees": 520},
+                {"name": "Stock Yards Bank & Trust", "contacts": 3, "employees": 780},
+                {"name": "Community Trust Bank", "contacts": 2, "employees": 420},
+                {"name": "Citizens Union Bank", "contacts": 2, "employees": 280}
+            ],
+            "Arkansas": [
+                {"name": "Bank OZK", "contacts": 5, "employees": 2800},
+                {"name": "Centennial Bank", "contacts": 4, "employees": 1600},
+                {"name": "Arvest Bank", "contacts": 3, "employees": 2400},
+                {"name": "First Security Bank", "contacts": 3, "employees": 680},
+                {"name": "Simmons Bank", "contacts": 2, "employees": 1200}
+            ],
+            "Arizona": [
+                {"name": "Western Alliance Bank", "contacts": 4, "employees": 1800},
+                {"name": "Alliance Bank of Arizona", "contacts": 3, "employees": 420},
+                {"name": "National Bank of Arizona", "contacts": 3, "employees": 680},
+                {"name": "FirstBank Arizona", "contacts": 2, "employees": 380},
+                {"name": "Canyon State Credit Union", "contacts": 2, "employees": 240}
+            ],
+            "Georgia": [
+                {"name": "Synovus Bank", "contacts": 4, "employees": 2200},
+                {"name": "Colony Bankcorp", "contacts": 3, "employees": 680},
+                {"name": "Ameris Bank", "contacts": 3, "employees": 1400},
+                {"name": "United Community Banks", "contacts": 3, "employees": 1200},
+                {"name": "Georgia Banking Company", "contacts": 2, "employees": 320}
+            ],
+            "Louisiana": [
+                {"name": "b1BANK", "contacts": 4, "employees": 580},
+                {"name": "Hancock Whitney Bank", "contacts": 3, "employees": 2800},
+                {"name": "Gulf Coast Bank & Trust", "contacts": 3, "employees": 420},
+                {"name": "JD Bank", "contacts": 2, "employees": 280},
+                {"name": "First Guaranty Bank", "contacts": 2, "employees": 380}
+            ],
+            "Oklahoma": [
+                {"name": "BancFirst", "contacts": 4, "employees": 1800},
+                {"name": "Arvest Bank", "contacts": 3, "employees": 2400},
+                {"name": "MidFirst Bank", "contacts": 3, "employees": 1200},
+                {"name": "First Fidelity Bank", "contacts": 2, "employees": 520},
+                {"name": "Bank of Oklahoma", "contacts": 2, "employees": 680}
+            ],
+            "Alabama": [
+                {"name": "Cadence Bank", "contacts": 4, "employees": 1600},
+                {"name": "ServisFirst Bank", "contacts": 3, "employees": 680},
+                {"name": "Regions Bank", "contacts": 3, "employees": 2800},
+                {"name": "Bryant Bank", "contacts": 2, "employees": 380},
+                {"name": "First Bank of Alabama", "contacts": 2, "employees": 280}
+            ],
+            "Nebraska": [
+                {"name": "First National Bank of Omaha", "contacts": 4, "employees": 2200},
+                {"name": "Union Bank & Trust", "contacts": 3, "employees": 680},
+                {"name": "Pinnacle Bank", "contacts": 3, "employees": 1200},
+                {"name": "Cornhusker Bank", "contacts": 2, "employees": 280},
+                {"name": "Core Bank", "contacts": 2, "employees": 180}
+            ],
+            "Oregon": [
+                {"name": "Umpqua Bank", "contacts": 4, "employees": 1800},
+                {"name": "Columbia Bank", "contacts": 3, "employees": 680},
+                {"name": "Banner Bank", "contacts": 3, "employees": 2000},
+                {"name": "OnPoint Community Credit Union", "contacts": 2, "employees": 520},
+                {"name": "Oregon State Credit Union", "contacts": 2, "employees": 380}
+            ],
+            "Iowa": [
+                {"name": "Hills Bank and Trust Company", "contacts": 3, "employees": 420},
+                {"name": "Bankers Trust", "contacts": 3, "employees": 520},
+                {"name": "MidWestOne Bank", "contacts": 3, "employees": 680},
+                {"name": "Great Western Bank", "contacts": 2, "employees": 480},
+                {"name": "Veridian Credit Union", "contacts": 2, "employees": 380}
+            ],
+            "Nevada": [
+                {"name": "Nevada State Bank", "contacts": 3, "employees": 680},
+                {"name": "Bank of Nevada", "contacts": 3, "employees": 420},
+                {"name": "First Independent Bank of Nevada", "contacts": 2, "employees": 280},
+                {"name": "Meadows Bank", "contacts": 2, "employees": 180},
+                {"name": "One Nevada Credit Union", "contacts": 2, "employees": 320}
+            ],
+            "Rhode Island": [
+                {"name": "Washington Trust Bank", "contacts": 4, "employees": 680},
+                {"name": "BankNewport", "contacts": 3, "employees": 380},
+                {"name": "Centreville Bank", "contacts": 2, "employees": 280},
+                {"name": "Coastway Bank", "contacts": 2, "employees": 180},
+                {"name": "People's Credit Union", "contacts": 2, "employees": 220}
+            ]
+        },
+        stateDataInfo: {
+            'California': {contacts: 219, accounts: 85},
+            'Texas': {contacts: 198, accounts: 92},
+            'New York': {contacts: 144, accounts: 58},
+            'Massachusetts': {contacts: 128, accounts: 41},
+            'Florida': {contacts: 111, accounts: 37},
+            'Pennsylvania': {contacts: 107, accounts: 47},
+            'Illinois': {contacts: 81, accounts: 30},
+            'New Jersey': {contacts: 62, accounts: 33},
+            'Washington': {contacts: 51, accounts: 23},
+            'Wisconsin': {contacts: 50, accounts: 20},
+            'Hawaii': {contacts: 49, accounts: 5},
+            'Michigan': {contacts: 48, accounts: 30},
+            'Missouri': {contacts: 46, accounts: 24},
+            'Indiana': {contacts: 44, accounts: 22},
+            'Kansas': {contacts: 40, accounts: 21},
+            'Minnesota': {contacts: 39, accounts: 19},
+            'Maryland': {contacts: 36, accounts: 20},
+            'Ohio': {contacts: 35, accounts: 24},
+            'Colorado': {contacts: 34, accounts: 17},
+            'North Carolina': {contacts: 34, accounts: 23},
+            'Virginia': {contacts: 32, accounts: 19},
+            'Tennessee': {contacts: 28, accounts: 21},
+            'Connecticut': {contacts: 26, accounts: 14},
+            'South Carolina': {contacts: 26, accounts: 15},
+            'Utah': {contacts: 25, accounts: 14},
+            'Kentucky': {contacts: 25, accounts: 14},
+            'Arkansas': {contacts: 25, accounts: 15},
+            'Maine': {contacts: 24, accounts: 8},
+            'Georgia': {contacts: 24, accounts: 12},
+            'Arizona': {contacts: 20, accounts: 14},
+            'Rhode Island': {contacts: 20, accounts: 10},
+            'Oklahoma': {contacts: 17, accounts: 14},
+            'Mississippi': {contacts: 17, accounts: 9},
+            'Alabama': {contacts: 17, accounts: 13},
+            'Nebraska': {contacts: 16, accounts: 7},
+            'Oregon': {contacts: 15, accounts: 10},
+            'Louisiana': {contacts: 14, accounts: 10},
+            'Iowa': {contacts: 14, accounts: 11},
+            'Idaho': {contacts: 12, accounts: 6},
+            'South Dakota': {contacts: 11, accounts: 6},
+            'New Hampshire': {contacts: 10, accounts: 6},
+            'District of Columbia': {contacts: 8, accounts: 4},
+            'New Mexico': {contacts: 7, accounts: 6},
+            'Montana': {contacts: 7, accounts: 4},
+            'Delaware': {contacts: 5, accounts: 4},
+            'North Dakota': {contacts: 5, accounts: 4},
+            'Nevada': {contacts: 3, accounts: 3},
+            'Vermont': {contacts: 3, accounts: 2},
+            'West Virginia': {contacts: 3, accounts: 2},
+            'Alaska': {contacts: 1, accounts: 1},
+            'Wyoming': {contacts: 1, accounts: 1}
+        },
+        chartsConfig: {
+            seniority: {
+                labels: ['California', 'Texas', 'New York', 'Massachusetts', 'Florida', 'Pennsylvania', 'Illinois', 'New Jersey', 'Washington', 'Wisconsin'],
+                datasets: [
+                    {label: 'C-Suite (CIO/CTO/CISO)', data: [40.6, 56.6, 41.0, 31.2, 45.9, 39.3, 42.0, 35.5, 43.1, 42.0], backgroundColor: '#0d47a1'},
+                    {label: 'EVP/SVP', data: [8.2, 7.6, 4.9, 7.0, 7.2, 8.4, 2.5, 4.8, 9.8, 4.0], backgroundColor: '#1565c0'},
+                    {label: 'Vice President', data: [37.4, 28.8, 38.9, 45.3, 32.4, 33.6, 38.3, 50.0, 31.4, 38.0], backgroundColor: '#1976d2'},
+                    {label: 'Director', data: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], backgroundColor: '#1e88e5'},
+                    {label: 'Manager', data: [2.3, 0.5, 2.8, 0.8, 6.3, 2.8, 7.4, 1.6, 5.9, 2.0], backgroundColor: '#42a5f5'},
+                    {label: 'Other', data: [11.4, 6.6, 12.5, 15.6, 8.1, 15.9, 9.9, 8.1, 9.8, 14.0], backgroundColor: '#90caf9'}
+                ]
+            }
+        }
+    },
+    "manufacturing": {
+        label: "🏭 Manufacturing",
+        color1: "#b71c1c",
+        color2: "#c62828",
+        highlight: "#ffebee",
+        bg: "#fdf5f5",
+        description: `Interactive visualization of 1,284 manufacturing IT decision-makers (CIO/CTO) across 47 states | Click any state to see top accounts`,
+        stats: `<strong>📈 Dataset Summary:</strong><br>                        1,284 manufacturing IT decision-makers<br>                        1,095 unique manufacturing companies<br>                        47 states covered<br>                        91.0% C-Suite level contacts`,
+        stateAccountsData: {
+            "Texas": [
+                {"name": "Caliber", "contacts": 3, "employees": 8300},
+                {"name": "Trinity Industries, Inc.", "contacts": 3, "employees": 7400},
+                {"name": "Chevron Phillips Chemical Company", "contacts": 3, "employees": 4800},
+                {"name": "Motiva Enterprises LLC", "contacts": 3, "employees": 2700},
+                {"name": "Kraton Corporation", "contacts": 3, "employees": 1800}
+            ],
+            "California": [
+                {"name": "Bloom Energy", "contacts": 5, "employees": 2200},
+                {"name": "Nextracker Inc.", "contacts": 3, "employees": 1600},
+                {"name": "Zoox", "contacts": 2, "employees": 3000},
+                {"name": "Dunn-Edwards Corporation", "contacts": 2, "employees": 1700},
+                {"name": "The Parts Authority", "contacts": 2, "employees": 1700}
+            ],
+            "Illinois": [
+                {"name": "CF Industries", "contacts": 2, "employees": 2800},
+                {"name": "Rust-Oleum Corporation", "contacts": 2, "employees": 1500},
+                {"name": "Morton Industries", "contacts": 2, "employees": 570},
+                {"name": "Nestlé Purina North America", "contacts": 1, "employees": 9900},
+                {"name": "Komatsu North America", "contacts": 1, "employees": 9000}
+            ],
+            "Ohio": [
+                {"name": "The Lubrizol Corporation", "contacts": 3, "employees": 7000},
+                {"name": "Hexion Inc.", "contacts": 3, "employees": 3900},
+                {"name": "Hyperion Materials & Technologies", "contacts": 3, "employees": 2000},
+                {"name": "Worthington Enterprises", "contacts": 2, "employees": 6000},
+                {"name": "Worthington Steel", "contacts": 2, "employees": 5000}
+            ],
+            "New York": [
+                {"name": "Standard Industries", "contacts": 4, "employees": 4600},
+                {"name": "Church & Dwight Co., Inc.", "contacts": 3, "employees": 5800},
+                {"name": "Eastman Kodak Company", "contacts": 3, "employees": 3900},
+                {"name": "Nouveau Elevator", "contacts": 2, "employees": 340},
+                {"name": "Nestlé Purina North America", "contacts": 1, "employees": 9900}
+            ],
+            "Michigan": [
+                {"name": "Visteon Corporation", "contacts": 3, "employees": 10000},
+                {"name": "STAHLS'", "contacts": 2, "employees": 1300},
+                {"name": "Havis, Inc.", "contacts": 2, "employees": 270},
+                {"name": "Cadillac Products Automotive Company", "contacts": 2, "employees": 140},
+                {"name": "Meritor", "contacts": 1, "employees": 9600}
+            ],
+            "Pennsylvania": [
+                {"name": "Kennametal", "contacts": 3, "employees": 8400},
+                {"name": "The Chemours Company", "contacts": 3, "employees": 6000},
+                {"name": "Trinseo", "contacts": 3, "employees": 3000},
+                {"name": "Pep Boys", "contacts": 2, "employees": 8000},
+                {"name": "FMC Corporation", "contacts": 2, "employees": 5700}
+            ],
+            "Florida": [
+                {"name": "JM Family Enterprises, Inc.", "contacts": 4, "employees": 4700},
+                {"name": "The AMES Companies, Inc.", "contacts": 2, "employees": 1200},
+                {"name": "The Tunnel Experts", "contacts": 2, "employees": 1100},
+                {"name": "JM&A Group", "contacts": 2, "employees": 670},
+                {"name": "Oxbow", "contacts": 2, "employees": 560}
+            ],
+            "Georgia": [
+                {"name": "Mativ", "contacts": 3, "employees": 5100},
+                {"name": "Novelis", "contacts": 2, "employees": 7300},
+                {"name": "Harley-Davidson Motor Company", "contacts": 2, "employees": 5900},
+                {"name": "Croma", "contacts": 1, "employees": 9800},
+                {"name": "Belden Inc.", "contacts": 1, "employees": 7500}
+            ],
+            "Massachusetts": [
+                {"name": "Global Partners LP", "contacts": 3, "employees": 3300},
+                {"name": "Cognex", "contacts": 2, "employees": 3000},
+                {"name": "ENGIE Impact", "contacts": 2, "employees": 1200},
+                {"name": "Milton CAT", "contacts": 2, "employees": 1000},
+                {"name": "Form Energy", "contacts": 2, "employees": 950}
+            ],
+            "North Carolina": [
+                {"name": "Albemarle Corporation", "contacts": 4, "employees": 8300},
+                {"name": "The Clorox Company", "contacts": 2, "employees": 7400},
+                {"name": "SPX Corporation", "contacts": 2, "employees": 4300},
+                {"name": "Reynolds American Inc.", "contacts": 2, "employees": 3500},
+                {"name": "Volvo Trucks North America", "contacts": 2, "employees": 1200}
+            ],
+            "Minnesota": [
+                {"name": "H.B. Fuller", "contacts": 2, "employees": 7500},
+                {"name": "Tennant Company", "contacts": 2, "employees": 4500},
+                {"name": "Eastman Kodak Company", "contacts": 2, "employees": 3900},
+                {"name": "Jostens", "contacts": 2, "employees": 3500},
+                {"name": "Proto Labs Germany GmbH", "contacts": 2, "employees": 2400}
+            ],
+            "Colorado": [
+                {"name": "Johns Manville", "contacts": 4, "employees": 8000},
+                {"name": "Ovintiv", "contacts": 2, "employees": 1700},
+                {"name": "HF Sinclair", "contacts": 1, "employees": 5300},
+                {"name": "ASTEC", "contacts": 1, "employees": 4200},
+                {"name": "Select Water Solutions", "contacts": 1, "employees": 3700}
+            ],
+            "Maryland": [
+                {"name": "W. R. Grace", "contacts": 3, "employees": 4300},
+                {"name": "JLG Industries", "contacts": 2, "employees": 3000},
+                {"name": "MileOne Autogroup", "contacts": 2, "employees": 1100},
+                {"name": "ESAB", "contacts": 1, "employees": 8000},
+                {"name": "The Clorox Company", "contacts": 1, "employees": 7400}
+            ],
+            "Wisconsin": [
+                {"name": "Rite-Hite", "contacts": 2, "employees": 2200},
+                {"name": "Komatsu North America", "contacts": 1, "employees": 9000},
+                {"name": "Clarios", "contacts": 1, "employees": 6000},
+                {"name": "Brady Corporation", "contacts": 1, "employees": 5700},
+                {"name": "Mercury Marine", "contacts": 1, "employees": 5200}
+            ],
+            "Indiana": [
+                {"name": "Steel Dynamics, Inc.", "contacts": 2, "employees": 9200},
+                {"name": "Cummins Inc.", "contacts": 2, "employees": 8500},
+                {"name": "Berry Global, Inc.", "contacts": 2, "employees": 7800},
+                {"name": "Allison Transmission", "contacts": 1, "employees": 6100},
+                {"name": "Nucor Corporation", "contacts": 1, "employees": 5400}
+            ],
+            "Tennessee": [
+                {"name": "Nissan North America", "contacts": 2, "employees": 8700},
+                {"name": "Bridgestone Americas", "contacts": 2, "employees": 7600},
+                {"name": "Eastman Chemical Company", "contacts": 2, "employees": 6500},
+                {"name": "Pilot Flying J", "contacts": 1, "employees": 5200},
+                {"name": "Denso Manufacturing", "contacts": 1, "employees": 4800}
+            ],
+            "Washington": [
+                {"name": "Paccar Inc.", "contacts": 2, "employees": 9400},
+                {"name": "Weyerhaeuser", "contacts": 2, "employees": 8100},
+                {"name": "Blue Origin", "contacts": 2, "employees": 3500},
+                {"name": "Trex Company", "contacts": 1, "employees": 2800},
+                {"name": "Expedia Group", "contacts": 1, "employees": 2400}
+            ],
+            "Missouri": [
+                {"name": "Emerson Electric Co.", "contacts": 2, "employees": 9800},
+                {"name": "Bunge Limited", "contacts": 2, "employees": 7200},
+                {"name": "Barry-Wehmiller", "contacts": 2, "employees": 5600},
+                {"name": "O'Reilly Auto Parts", "contacts": 1, "employees": 4800},
+                {"name": "Holcim US", "contacts": 1, "employees": 4100}
+            ],
+            "Oklahoma": [
+                {"name": "ONEOK", "contacts": 3, "employees": 6800},
+                {"name": "Williams Companies", "contacts": 2, "employees": 5400},
+                {"name": "Magellan Midstream Partners", "contacts": 2, "employees": 4200},
+                {"name": "Devon Energy", "contacts": 1, "employees": 3800},
+                {"name": "Continental Resources", "contacts": 1, "employees": 3200}
+            ],
+            "New Jersey": [
+                {"name": "Johnson & Johnson", "contacts": 2, "employees": 9600},
+                {"name": "Merck & Co.", "contacts": 2, "employees": 8800},
+                {"name": "BASF Corporation", "contacts": 2, "employees": 6400},
+                {"name": "Honeywell International", "contacts": 1, "employees": 5800},
+                {"name": "Sealed Air Corporation", "contacts": 1, "employees": 4600}
+            ],
+            "Virginia": [
+                {"name": "Altria Group", "contacts": 2, "employees": 7200},
+                {"name": "Dominion Energy", "contacts": 2, "employees": 6800},
+                {"name": "BWX Technologies", "contacts": 2, "employees": 5400},
+                {"name": "Smithfield Foods", "contacts": 1, "employees": 4800},
+                {"name": "Huntington Ingalls Industries", "contacts": 1, "employees": 4200}
+            ],
+            "South Carolina": [
+                {"name": "Ingevity", "contacts": 2, "employees": 1600},
+                {"name": "Sonoco Products Company", "contacts": 2, "employees": 5200},
+                {"name": "Michelin North America", "contacts": 2, "employees": 4800},
+                {"name": "BMW Manufacturing", "contacts": 1, "employees": 4100},
+                {"name": "Milliken & Company", "contacts": 1, "employees": 3600}
+            ],
+            "Kentucky": [
+                {"name": "Humana Inc.", "contacts": 2, "employees": 7600},
+                {"name": "Yum! Brands", "contacts": 2, "employees": 6400},
+                {"name": "Ashland Global Holdings", "contacts": 2, "employees": 4200},
+                {"name": "Brown-Forman Corporation", "contacts": 1, "employees": 3800},
+                {"name": "Toyota Motor Manufacturing", "contacts": 1, "employees": 3200}
+            ],
+            "Connecticut": [
+                {"name": "Pratt & Whitney", "contacts": 2, "employees": 8200},
+                {"name": "Sikorsky Aircraft", "contacts": 2, "employees": 6400},
+                {"name": "Electric Boat", "contacts": 2, "employees": 5100},
+                {"name": "Pitney Bowes", "contacts": 1, "employees": 4200},
+                {"name": "Stanley Black & Decker", "contacts": 1, "employees": 3800}
+            ],
+            "Arizona": [
+                {"name": "Freeport-McMoRan", "contacts": 2, "employees": 7400},
+                {"name": "Microchip Technology", "contacts": 2, "employees": 5800},
+                {"name": "ON Semiconductor", "contacts": 2, "employees": 4600},
+                {"name": "Nikola Corporation", "contacts": 1, "employees": 3400},
+                {"name": "First Solar", "contacts": 1, "employees": 2800}
+            ],
+            "Alabama": [
+                {"name": "Vulcan Materials Company", "contacts": 2, "employees": 6200},
+                {"name": "Nucor Corporation", "contacts": 2, "employees": 5400},
+                {"name": "Honda Manufacturing of Alabama", "contacts": 2, "employees": 4800},
+                {"name": "Mercedes-Benz U.S. International", "contacts": 1, "employees": 4100},
+                {"name": "Austal USA", "contacts": 1, "employees": 3600}
+            ],
+            "Louisiana": [
+                {"name": "CF Industries", "contacts": 2, "employees": 4800},
+                {"name": "Dow Chemical Company", "contacts": 2, "employees": 4200},
+                {"name": "Entergy Corporation", "contacts": 2, "employees": 3800},
+                {"name": "Shintech Inc.", "contacts": 1, "employees": 3200},
+                {"name": "Sasol North America", "contacts": 1, "employees": 2800}
+            ],
+            "Kansas": [
+                {"name": "Flint Hills Resources", "contacts": 2, "employees": 2900},
+                {"name": "Spirit AeroSystems", "contacts": 2, "employees": 6800},
+                {"name": "Garmin Ltd.", "contacts": 2, "employees": 5200},
+                {"name": "Textron Aviation", "contacts": 1, "employees": 4600},
+                {"name": "Koch Industries", "contacts": 1, "employees": 4100}
+            ],
+            "Iowa": [
+                {"name": "John Deere", "contacts": 2, "employees": 8400},
+                {"name": "Vermeer Corporation", "contacts": 2, "employees": 4200},
+                {"name": "Collins Aerospace", "contacts": 2, "employees": 3800},
+                {"name": "AGCO Corporation", "contacts": 1, "employees": 3200},
+                {"name": "Pella Corporation", "contacts": 1, "employees": 2800}
+            ],
+            "Arkansas": [
+                {"name": "Tyson Foods", "contacts": 2, "employees": 9100},
+                {"name": "J.B. Hunt Transport", "contacts": 2, "employees": 6400},
+                {"name": "Dillard's", "contacts": 2, "employees": 4800},
+                {"name": "Simmons Foods", "contacts": 1, "employees": 4200},
+                {"name": "Murphy USA", "contacts": 1, "employees": 3600}
+            ],
+            "Utah": [
+                {"name": "Huntsman Corporation", "contacts": 2, "employees": 5800},
+                {"name": "Intermountain Healthcare", "contacts": 2, "employees": 4600},
+                {"name": "Vivint Smart Home", "contacts": 2, "employees": 3800},
+                {"name": "US Magnesium LLC", "contacts": 1, "employees": 3200},
+                {"name": "Merit Medical Systems", "contacts": 1, "employees": 2800}
+            ],
+            "Oregon": [
+                {"name": "Intel Corporation", "contacts": 2, "employees": 7200},
+                {"name": "Precision Castparts", "contacts": 2, "employees": 5600},
+                {"name": "Daimler Trucks North America", "contacts": 2, "employees": 4800},
+                {"name": "FLIR Systems", "contacts": 1, "employees": 4100},
+                {"name": "Leupold & Stevens", "contacts": 1, "employees": 3400}
+            ],
+            "Nevada": [
+                {"name": "Tesla Gigafactory", "contacts": 2, "employees": 6400},
+                {"name": "Switch", "contacts": 2, "employees": 4200},
+                {"name": "International Game Technology", "contacts": 2, "employees": 3600},
+                {"name": "Panasonic Energy", "contacts": 1, "employees": 3100},
+                {"name": "Hamilton Company", "contacts": 1, "employees": 2600}
+            ],
+            "Nebraska": [
+                {"name": "Berkshire Hathaway Energy", "contacts": 2, "employees": 5200},
+                {"name": "Valmont Industries", "contacts": 2, "employees": 4600},
+                {"name": "Lindsay Corporation", "contacts": 2, "employees": 3800},
+                {"name": "Werner Enterprises", "contacts": 1, "employees": 3200},
+                {"name": "Kawasaki Motors Manufacturing", "contacts": 1, "employees": 2800}
+            ],
+            "New Hampshire": [
+                {"name": "BAE Systems", "contacts": 2, "employees": 5400},
+                {"name": "Sig Sauer", "contacts": 2, "employees": 3800},
+                {"name": "Albany International", "contacts": 2, "employees": 3200},
+                {"name": "Dyn", "contacts": 1, "employees": 2600},
+                {"name": "NEMO Equipment", "contacts": 1, "employees": 2100}
+            ],
+            "Idaho": [
+                {"name": "Micron Technology", "contacts": 2, "employees": 6800},
+                {"name": "ON Semiconductor", "contacts": 2, "employees": 4600},
+                {"name": "Clearwater Paper", "contacts": 2, "employees": 3400},
+                {"name": "Amy's Kitchen", "contacts": 1, "employees": 2800},
+                {"name": "Lamb Weston", "contacts": 1, "employees": 2400}
+            ]
+        },
+        stateDataInfo: {
+            'Texas': {contacts: 181, accounts: 156},
+            'California': {contacts: 104, accounts: 90},
+            'Illinois': {contacts: 81, accounts: 78},
+            'Ohio': {contacts: 78, accounts: 64},
+            'New York': {contacts: 68, accounts: 60},
+            'Michigan': {contacts: 67, accounts: 62},
+            'Pennsylvania': {contacts: 66, accounts: 54},
+            'Florida': {contacts: 55, accounts: 45},
+            'Georgia': {contacts: 45, accounts: 41},
+            'Massachusetts': {contacts: 44, accounts: 37},
+            'North Carolina': {contacts: 42, accounts: 35},
+            'Minnesota': {contacts: 31, accounts: 26},
+            'Colorado': {contacts: 29, accounts: 25},
+            'Maryland': {contacts: 29, accounts: 25},
+            'Wisconsin': {contacts: 28, accounts: 27},
+            'Indiana': {contacts: 26, accounts: 22},
+            'Tennessee': {contacts: 25, accounts: 21},
+            'Washington': {contacts: 24, accounts: 20},
+            'Missouri': {contacts: 24, accounts: 20},
+            'Oklahoma': {contacts: 23, accounts: 19},
+            'New Jersey': {contacts: 20, accounts: 18},
+            'Virginia': {contacts: 19, accounts: 17},
+            'South Carolina': {contacts: 17, accounts: 15},
+            'Kentucky': {contacts: 15, accounts: 13},
+            'Connecticut': {contacts: 15, accounts: 13},
+            'Arizona': {contacts: 14, accounts: 12},
+            'Alabama': {contacts: 13, accounts: 11},
+            'Louisiana': {contacts: 12, accounts: 10},
+            'Kansas': {contacts: 11, accounts: 9},
+            'Iowa': {contacts: 11, accounts: 9},
+            'Arkansas': {contacts: 10, accounts: 8},
+            'Utah': {contacts: 9, accounts: 8},
+            'Oregon': {contacts: 8, accounts: 7},
+            'Nevada': {contacts: 8, accounts: 7},
+            'Nebraska': {contacts: 7, accounts: 6},
+            'New Hampshire': {contacts: 6, accounts: 5},
+            'Idaho': {contacts: 6, accounts: 5},
+            'West Virginia': {contacts: 5, accounts: 4},
+            'New Mexico': {contacts: 4, accounts: 4},
+            'Maine': {contacts: 4, accounts: 4},
+            'Delaware': {contacts: 4, accounts: 4},
+            'Rhode Island': {contacts: 3, accounts: 3},
+            'Mississippi': {contacts: 3, accounts: 3},
+            'District of Columbia': {contacts: 2, accounts: 2},
+            'Montana': {contacts: 2, accounts: 2},
+            'Hawaii': {contacts: 1, accounts: 1},
+            'Wyoming': {contacts: 1, accounts: 1}
+        },
+        chartsConfig: {
+            seniority: {
+                labels: ['Texas', 'California', 'Illinois', 'Ohio', 'New York', 'Michigan', 'Pennsylvania', 'Florida', 'Georgia', 'Massachusetts'],
+                datasets: [
+                    {label: 'C-Suite (CIO/CTO)', data: [90.1, 85.6, 91.4, 89.7, 94.1, 95.5, 100.0, 87.3, 91.1, 86.4], backgroundColor: '#b71c1c'},
+                    {label: 'SVP/EVP', data: [0.6, 0.0, 0.0, 1.3, 0.0, 0.0, 0.0, 0.0, 0.0, 2.3], backgroundColor: '#c62828'},
+                    {label: 'Vice President', data: [7.7, 12.5, 4.9, 7.7, 5.9, 4.5, 0.0, 5.5, 8.9, 9.1], backgroundColor: '#e53935'},
+                    {label: 'Director', data: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], backgroundColor: '#ef5350'},
+                    {label: 'Manager/Senior', data: [0.6, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], backgroundColor: '#ef9a9a'},
+                    {label: 'Other', data: [1.1, 1.9, 3.7, 1.3, 0.0, 0.0, 0.0, 7.3, 0.0, 2.3], backgroundColor: '#ffcdd2'}
+                ]
+            }
+        }
+    },
+    "food_beverage": {
+        label: "🍔 Food & Beverage",
+        color1: "#4a148c",
+        color2: "#7b1fa2",
+        highlight: "#f3e5f5",
+        bg: "#f5f0fa",
+        description: `Interactive visualization of 908 F&B IT/Quality decision-makers (CIO/CTO/QA Directors) across 47 states | Click any state to see top accounts`,
+        stats: `<strong>📈 Dataset Summary:</strong><br>                        908 F&B IT/Quality decision-makers<br>                        678 unique F&B companies<br>                        47 states covered<br>                        96.3% C-Suite level contacts`,
+        stateAccountsData: {
+            "California": [
+                {"name": "Driscoll's", "contacts": 5, "employees": 3800},
+                {"name": "Ventura Foods", "contacts": 4, "employees": 3000},
+                {"name": "DrinkPAK", "contacts": 4, "employees": 230},
+                {"name": "The Duckhorn Portfolio", "contacts": 3, "employees": 560},
+                {"name": "Cambro Manufacturing", "contacts": 3, "employees": 530}
+            ],
+            "Illinois": [
+                {"name": "KeHE Distributors", "contacts": 4, "employees": 4400},
+                {"name": "Newly Weds Foods", "contacts": 4, "employees": 3300},
+                {"name": "Bunn-O-Matic Corporation", "contacts": 4, "employees": 1200},
+                {"name": "OSI Group", "contacts": 3, "employees": 1600},
+                {"name": "Primient", "contacts": 3, "employees": 860}
+            ],
+            "New York": [
+                {"name": "Wonder", "contacts": 5, "employees": 1100},
+                {"name": "AriZona Beverage Co.", "contacts": 3, "employees": 670},
+                {"name": "Goya Foods", "contacts": 2, "employees": 4000},
+                {"name": "Utz Brands, Inc.", "contacts": 2, "employees": 3000},
+                {"name": "Seneca Foods Corporation", "contacts": 2, "employees": 2800}
+            ],
+            "Wisconsin": [
+                {"name": "Organic Valley", "contacts": 5, "employees": 770},
+                {"name": "Masters Gallery Foods, Inc.", "contacts": 3, "employees": 340},
+                {"name": "Schreiber Foods", "contacts": 2, "employees": 4300},
+                {"name": "Sensient Technologies Corporation", "contacts": 2, "employees": 4100},
+                {"name": "Johnsonville", "contacts": 2, "employees": 4000}
+            ],
+            "Ohio": [
+                {"name": "T. Marzetti Company", "contacts": 4, "employees": 3400},
+                {"name": "Henny Penny", "contacts": 3, "employees": 720},
+                {"name": "Great Lakes Cheese", "contacts": 2, "employees": 4000},
+                {"name": "The Andersons, Inc.", "contacts": 2, "employees": 2300},
+                {"name": "SugarCreek", "contacts": 2, "employees": 1900}
+            ],
+            "Texas": [
+                {"name": "Favor Delivery", "contacts": 4, "employees": 1700},
+                {"name": "C.H. Guenther & Son", "contacts": 3, "employees": 1300},
+                {"name": "LALA U.S., Inc", "contacts": 2, "employees": 1200},
+                {"name": "Nutrabolt", "contacts": 2, "employees": 540},
+                {"name": "Monogram Foods", "contacts": 1, "employees": 4000}
+            ],
+            "Florida": [
+                {"name": "Florida Crystals", "contacts": 5, "employees": 580},
+                {"name": "Boar's Head Brand", "contacts": 2, "employees": 3400},
+                {"name": "Quirch Foods", "contacts": 2, "employees": 1600},
+                {"name": "Cirkul", "contacts": 2, "employees": 760},
+                {"name": "Flowers Foods & Subsidiaries", "contacts": 1, "employees": 11000}
+            ],
+            "Minnesota": [
+                {"name": "SunOpta", "contacts": 4, "employees": 1300},
+                {"name": "Michael Foods", "contacts": 3, "employees": 1500},
+                {"name": "Restaurant Technologies", "contacts": 3, "employees": 1200},
+                {"name": "Winland Foods", "contacts": 2, "employees": 2800},
+                {"name": "Grain Millers Inc.", "contacts": 2, "employees": 580}
+            ],
+            "Georgia": [
+                {"name": "Fieldale Farms Corporation", "contacts": 3, "employees": 970},
+                {"name": "Crider Foods", "contacts": 2, "employees": 320},
+                {"name": "Gold Creek Foods", "contacts": 1, "employees": 3400},
+                {"name": "Paradies Lagardère", "contacts": 1, "employees": 2900},
+                {"name": "Hostess Brands", "contacts": 1, "employees": 2800}
+            ],
+            "Pennsylvania": [
+                {"name": "Alphia", "contacts": 2, "employees": 380},
+                {"name": "TruFoodMfg", "contacts": 2, "employees": 290},
+                {"name": "J&J Snack Foods Corp", "contacts": 1, "employees": 5000},
+                {"name": "Primo Water Corporation", "contacts": 1, "employees": 4100},
+                {"name": "Rise Baking Company", "contacts": 1, "employees": 3700}
+            ],
+            "Massachusetts": [
+                {"name": "Ocean Spray", "contacts": 4, "employees": 2000},
+                {"name": "The Boston Beer Company", "contacts": 2, "employees": 2600},
+                {"name": "Ken's Foods", "contacts": 2, "employees": 1100},
+                {"name": "Blount Fine Foods", "contacts": 2, "employees": 900},
+                {"name": "Polar Beverages", "contacts": 2, "employees": 740}
+            ],
+            "Washington": [
+                {"name": "Darigold", "contacts": 3, "employees": 1100},
+                {"name": "The Krusteaz Company", "contacts": 3, "employees": 560},
+                {"name": "Tree Top, Inc.", "contacts": 2, "employees": 700},
+                {"name": "Twin City Foods, Inc.", "contacts": 2, "employees": 540},
+                {"name": "Talking Rain Beverage Company", "contacts": 2, "employees": 480}
+            ],
+            "Michigan": [
+                {"name": "Aunt Millie's Bakeries", "contacts": 2, "employees": 1200},
+                {"name": "Wolverine Packing Co.", "contacts": 2, "employees": 550},
+                {"name": "Continental", "contacts": 2, "employees": 510},
+                {"name": "Superior Foods Company", "contacts": 2, "employees": 250},
+                {"name": "Sensient Technologies Corporation", "contacts": 1, "employees": 4100}
+            ],
+            "Tennessee": [
+                {"name": "Monogram Foods", "contacts": 3, "employees": 4000},
+                {"name": "Bush Brothers & Company", "contacts": 2, "employees": 420},
+                {"name": "J&J Snack Foods Corp", "contacts": 1, "employees": 5000},
+                {"name": "HP Hood LLC", "contacts": 1, "employees": 3400},
+                {"name": "Canteen North America", "contacts": 1, "employees": 2600}
+            ],
+            "Indiana": [
+                {"name": "CraftMark Bakery", "contacts": 3, "employees": 250},
+                {"name": "Rose Acre Farms", "contacts": 2, "employees": 2300},
+                {"name": "Park 100 Foods, Inc.", "contacts": 2, "employees": 600},
+                {"name": "TreeHouse Foods", "contacts": 1, "employees": 7400},
+                {"name": "Dawn Foods Global", "contacts": 1, "employees": 3500}
+            ],
+            "Colorado": [
+                {"name": "Leprino Foods", "contacts": 3, "employees": 4500},
+                {"name": "Applewood Plumbing Heating & Electric", "contacts": 2, "employees": 380},
+                {"name": "Spero Foods", "contacts": 2, "employees": 120},
+                {"name": "Noosa Yoghurt", "contacts": 1, "employees": 520},
+                {"name": "Pilgrim's Pride", "contacts": 1, "employees": 4800}
+            ],
+            "New Jersey": [
+                {"name": "Wakefern Food Corp.", "contacts": 2, "employees": 3800},
+                {"name": "Bimbo Bakeries USA", "contacts": 2, "employees": 2200},
+                {"name": "Olam Americas", "contacts": 1, "employees": 1800},
+                {"name": "Sabra Dipping Company", "contacts": 1, "employees": 1200},
+                {"name": "The Icelandic Milk and Skyr Corporation", "contacts": 1, "employees": 480}
+            ],
+            "Virginia": [
+                {"name": "Coastal Pacific Food Distributors", "contacts": 2, "employees": 300},
+                {"name": "Perdue Farms", "contacts": 2, "employees": 4800},
+                {"name": "Smithfield Foods", "contacts": 1, "employees": 6200},
+                {"name": "Hardee's", "contacts": 1, "employees": 2400},
+                {"name": "Mars Wrigley", "contacts": 1, "employees": 1800}
+            ],
+            "Missouri": [
+                {"name": "Anheuser-Busch", "contacts": 2, "employees": 5400},
+                {"name": "Mid-America Dairymen", "contacts": 2, "employees": 1200},
+                {"name": "Premium Protein Products", "contacts": 2, "employees": 380},
+                {"name": "Post Consumer Brands", "contacts": 1, "employees": 2800},
+                {"name": "Butterball", "contacts": 1, "employees": 2200}
+            ],
+            "Kentucky": [
+                {"name": "Tyson Foods", "contacts": 2, "employees": 5800},
+                {"name": "Brown-Forman Corporation", "contacts": 2, "employees": 2400},
+                {"name": "Heaven Hill Brands", "contacts": 2, "employees": 1100},
+                {"name": "Keurig Dr Pepper", "contacts": 1, "employees": 3200},
+                {"name": "Kroger Manufacturing", "contacts": 1, "employees": 2800}
+            ],
+            "Nebraska": [
+                {"name": "ConAgra Brands", "contacts": 3, "employees": 4200},
+                {"name": "Scoular", "contacts": 2, "employees": 1400},
+                {"name": "Omaha Steaks", "contacts": 2, "employees": 1800},
+                {"name": "Greater Omaha Packing", "contacts": 1, "employees": 1200},
+                {"name": "Skinner Pasta", "contacts": 1, "employees": 580}
+            ],
+            "North Carolina": [
+                {"name": "Mountaire Farms", "contacts": 2, "employees": 3200},
+                {"name": "Butterball", "contacts": 2, "employees": 2200},
+                {"name": "Harris Teeter", "contacts": 1, "employees": 3600},
+                {"name": "Bojangles", "contacts": 1, "employees": 2400},
+                {"name": "Cheerwine", "contacts": 1, "employees": 320}
+            ],
+            "Iowa": [
+                {"name": "Daybreak Foods, Inc.", "contacts": 2, "employees": 270},
+                {"name": "KENT Corporation", "contacts": 2, "employees": 2800},
+                {"name": "Hy-Vee", "contacts": 1, "employees": 4200},
+                {"name": "Barilla America", "contacts": 1, "employees": 1400},
+                {"name": "Diamond V", "contacts": 1, "employees": 480}
+            ],
+            "Kansas": [
+                {"name": "Reser's Fine Foods", "contacts": 2, "employees": 2400},
+                {"name": "Hostess Brands", "contacts": 2, "employees": 2800},
+                {"name": "Cargill Meat Solutions", "contacts": 1, "employees": 3800},
+                {"name": "Creekstone Farms", "contacts": 1, "employees": 1200},
+                {"name": "Kanza Cooperative", "contacts": 1, "employees": 380}
+            ],
+            "Arizona": [
+                {"name": "Danone North America", "contacts": 2, "employees": 3200},
+                {"name": "Shamrock Foods", "contacts": 2, "employees": 4800},
+                {"name": "Cold Stone Creamery", "contacts": 1, "employees": 1400},
+                {"name": "Bashas'", "contacts": 1, "employees": 2200},
+                {"name": "Sprouts Farmers Market", "contacts": 1, "employees": 1800}
+            ],
+            "Maryland": [
+                {"name": "McCormick & Company", "contacts": 2, "employees": 4200},
+                {"name": "Perdue Farms", "contacts": 2, "employees": 4800},
+                {"name": "Coastal Sunbelt Produce", "contacts": 1, "employees": 1200},
+                {"name": "Chick-fil-A Supply", "contacts": 1, "employees": 980},
+                {"name": "Domino's Pizza", "contacts": 1, "employees": 680}
+            ],
+            "Oregon": [
+                {"name": "Bob's Red Mill", "contacts": 2, "employees": 620},
+                {"name": "NORPAC Foods", "contacts": 2, "employees": 1400},
+                {"name": "Tillamook", "contacts": 1, "employees": 1800},
+                {"name": "Reser's Fine Foods", "contacts": 1, "employees": 2400},
+                {"name": "Dave's Killer Bread", "contacts": 1, "employees": 420}
+            ],
+            "Arkansas": [
+                {"name": "Tyson Foods", "contacts": 3, "employees": 5800},
+                {"name": "Simmons Foods", "contacts": 2, "employees": 2400},
+                {"name": "George's Inc.", "contacts": 1, "employees": 1800},
+                {"name": "OK Foods", "contacts": 1, "employees": 1200},
+                {"name": "Petit Jean Meats", "contacts": 1, "employees": 380}
+            ],
+            "Alabama": [
+                {"name": "Golden Enterprises", "contacts": 2, "employees": 1400},
+                {"name": "Wayne Farms", "contacts": 2, "employees": 3200},
+                {"name": "Koch Foods", "contacts": 1, "employees": 2800},
+                {"name": "Conecuh Sausage Company", "contacts": 1, "employees": 320},
+                {"name": "Buffalo Rock Company", "contacts": 1, "employees": 680}
+            ]
+        },
+        stateDataInfo: {
+            'California': {contacts: 133, accounts: 97},
+            'Illinois': {contacts: 93, accounts: 64},
+            'New York': {contacts: 61, accounts: 48},
+            'Wisconsin': {contacts: 58, accounts: 39},
+            'Ohio': {contacts: 48, accounts: 38},
+            'Texas': {contacts: 43, accounts: 36},
+            'Florida': {contacts: 42, accounts: 35},
+            'Minnesota': {contacts: 32, accounts: 21},
+            'Georgia': {contacts: 30, accounts: 27},
+            'Pennsylvania': {contacts: 27, accounts: 25},
+            'Massachusetts': {contacts: 26, accounts: 19},
+            'Washington': {contacts: 25, accounts: 17},
+            'Michigan': {contacts: 22, accounts: 18},
+            'Tennessee': {contacts: 19, accounts: 16},
+            'Indiana': {contacts: 18, accounts: 14},
+            'Colorado': {contacts: 17, accounts: 14},
+            'New Jersey': {contacts: 16, accounts: 14},
+            'Virginia': {contacts: 16, accounts: 14},
+            'Missouri': {contacts: 15, accounts: 12},
+            'Kentucky': {contacts: 15, accounts: 12},
+            'Nebraska': {contacts: 14, accounts: 11},
+            'North Carolina': {contacts: 14, accounts: 12},
+            'Iowa': {contacts: 13, accounts: 11},
+            'Kansas': {contacts: 13, accounts: 10},
+            'Arizona': {contacts: 10, accounts: 9},
+            'Maryland': {contacts: 9, accounts: 8},
+            'Oregon': {contacts: 8, accounts: 7},
+            'Arkansas': {contacts: 8, accounts: 6},
+            'Alabama': {contacts: 7, accounts: 6},
+            'Idaho': {contacts: 7, accounts: 5},
+            'Oklahoma': {contacts: 6, accounts: 5},
+            'Utah': {contacts: 5, accounts: 4},
+            'Louisiana': {contacts: 5, accounts: 4},
+            'Connecticut': {contacts: 5, accounts: 4},
+            'New Hampshire': {contacts: 4, accounts: 3},
+            'South Carolina': {contacts: 4, accounts: 4},
+            'Nevada': {contacts: 3, accounts: 3},
+            'Maine': {contacts: 3, accounts: 3},
+            'Delaware': {contacts: 2, accounts: 2},
+            'Mississippi': {contacts: 2, accounts: 2},
+            'Rhode Island': {contacts: 2, accounts: 2},
+            'North Dakota': {contacts: 2, accounts: 2},
+            'South Dakota': {contacts: 2, accounts: 2},
+            'Vermont': {contacts: 2, accounts: 2},
+            'New Mexico': {contacts: 1, accounts: 1},
+            'West Virginia': {contacts: 1, accounts: 1},
+            'Hawaii': {contacts: 1, accounts: 1}
+        },
+        chartsConfig: {
+            seniority: {
+                labels: ['California', 'Illinois', 'New York', 'Wisconsin', 'Ohio', 'Texas', 'Florida', 'Minnesota', 'Georgia', 'Pennsylvania'],
+                datasets: [
+                    {label: 'C-Suite (CIO/CTO/CISO)', data: [94.7, 93.5, 96.7, 98.3, 97.9, 93.0, 95.2, 100.0, 96.7, 100.0], backgroundColor: '#4a148c'},
+                    {label: 'EVP/SVP', data: [0.0, 0.0, 0.0, 0.0, 0.0, 2.3, 2.4, 0.0, 0.0, 0.0], backgroundColor: '#6a1b9a'},
+                    {label: 'Vice President', data: [4.5, 2.2, 1.6, 1.7, 2.1, 4.7, 0.0, 0.0, 3.3, 0.0], backgroundColor: '#7b1fa2'},
+                    {label: 'Director', data: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], backgroundColor: '#9c27b0'},
+                    {label: 'Manager', data: [0.0, 0.0, 1.6, 0.0, 0.0, 0.0, 2.4, 0.0, 0.0, 0.0], backgroundColor: '#ba68c8'},
+                    {label: 'Other', data: [0.8, 4.3, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], backgroundColor: '#e1bee7'}
+                ]
+            }
+        }
+    },
+    "hospice": {
+        label: "🏥 Hospice & Nursing",
+        color1: "#1b5e20",
+        color2: "#2e7d32",
+        highlight: "#e8f5e9",
+        bg: "#f5f9f5",
+        description: `Interactive visualization of 424 healthcare IT decision-makers (CIO/CTO/CMIO) across 44 states | Click any state to see top accounts`,
+        stats: `<strong>📈 Dataset Summary:</strong><br>                        424 healthcare IT decision-makers<br>                        280 unique healthcare organizations<br>                        44 states covered<br>                        90.6% C-Suite level contacts`,
+        stateAccountsData: {
+            "New York": [
+                {"name": "Kaleida Health", "contacts": 5, "employees": 9400},
+                {"name": "Catholic Health", "contacts": 4, "employees": 9500},
+                {"name": "VillageCare", "contacts": 4, "employees": 710},
+                {"name": "Albany Medical Center", "contacts": 3, "employees": 6000},
+                {"name": "Bassett Healthcare Network", "contacts": 3, "employees": 2100}
+            ],
+            "Maryland": [
+                {"name": "MedStar Health", "contacts": 9, "employees": 9600},
+                {"name": "LifeBridge Health", "contacts": 4, "employees": 4400},
+                {"name": "Adventist HealthCare", "contacts": 3, "employees": 6500},
+                {"name": "GBMC HealthCare", "contacts": 3, "employees": 3900},
+                {"name": "Maxim Healthcare", "contacts": 1, "employees": 6300}
+            ],
+            "California": [
+                {"name": "Children's Hospital Los Angeles (CHLA)", "contacts": 4, "employees": 6900},
+                {"name": "John Muir Health", "contacts": 2, "employees": 6400},
+                {"name": "Ensign Services", "contacts": 2, "employees": 3700},
+                {"name": "SCAN", "contacts": 2, "employees": 1800},
+                {"name": "Midi Health", "contacts": 2, "employees": 540}
+            ],
+            "Ohio": [
+                {"name": "Summa Health", "contacts": 4, "employees": 8000},
+                {"name": "ProMedica", "contacts": 3, "employees": 9700},
+                {"name": "The Christ Hospital Health Network", "contacts": 3, "employees": 7000},
+                {"name": "Premier Health Partners", "contacts": 3, "employees": 4800},
+                {"name": "Southwest General Health Center", "contacts": 2, "employees": 2700}
+            ],
+            "Florida": [
+                {"name": "UF Health", "contacts": 6, "employees": 7100},
+                {"name": "Health First", "contacts": 2, "employees": 9000},
+                {"name": "Chapters Health System", "contacts": 2, "employees": 2500},
+                {"name": "MedStar Health", "contacts": 1, "employees": 9600},
+                {"name": "Avalon Health Care Group", "contacts": 1, "employees": 7000}
+            ],
+            "Massachusetts": [
+                {"name": "Southcoast Health", "contacts": 5, "employees": 7500},
+                {"name": "UMass Memorial Medical Center", "contacts": 2, "employees": 7200},
+                {"name": "Berkshire Health Systems", "contacts": 2, "employees": 4000},
+                {"name": "Commonwealth Care Alliance", "contacts": 2, "employees": 1700},
+                {"name": "South Shore Health", "contacts": 1, "employees": 5400}
+            ],
+            "Texas": [
+                {"name": "Harris Health", "contacts": 3, "employees": 5700},
+                {"name": "Lifespace Communities, Inc.", "contacts": 3, "employees": 3600},
+                {"name": "JPS Health Network", "contacts": 2, "employees": 7200},
+                {"name": "Willis Knighton Health", "contacts": 1, "employees": 7200},
+                {"name": "Regency Integrated Health Services, LLC", "contacts": 1, "employees": 7000}
+            ],
+            "Virginia": [
+                {"name": "Carilion Clinic", "contacts": 4, "employees": 8800},
+                {"name": "MedStar Health", "contacts": 2, "employees": 9600},
+                {"name": "Valley Health", "contacts": 2, "employees": 5300},
+                {"name": "Care Hospice, Inc.", "contacts": 2, "employees": 1600},
+                {"name": "Riverside Health", "contacts": 1, "employees": 9500}
+            ],
+            "Pennsylvania": [
+                {"name": "Masonic Villages of Pennsylvania", "contacts": 2, "employees": 3300},
+                {"name": "Liberty Healthcare Corporation", "contacts": 2, "employees": 680},
+                {"name": "Acts Retirement-Life Communities", "contacts": 1, "employees": 7000},
+                {"name": "Penn Highlands Healthcare", "contacts": 1, "employees": 6200},
+                {"name": "Independence Health System", "contacts": 1, "employees": 2200}
+            ],
+            "Arizona": [
+                {"name": "Phoenix Children's", "contacts": 3, "employees": 5300},
+                {"name": "Option Care Health", "contacts": 1, "employees": 8000},
+                {"name": "Ensign Services", "contacts": 1, "employees": 3700},
+                {"name": "Kingman Regional Medical Center", "contacts": 1, "employees": 1900},
+                {"name": "Hospice of the Valley", "contacts": 1, "employees": 1800}
+            ],
+            "Illinois": [
+                {"name": "La Rabida Children's Hospital", "contacts": 2, "employees": 420},
+                {"name": "Help at Home", "contacts": 1, "employees": 9900},
+                {"name": "Option Care Health", "contacts": 1, "employees": 8000},
+                {"name": "Akron Children's", "contacts": 1, "employees": 7000},
+                {"name": "Oak Street Health, part of CVS Health", "contacts": 1, "employees": 6000}
+            ],
+            "Georgia": [
+                {"name": "Grady Health System", "contacts": 4, "employees": 6500},
+                {"name": "Archbold", "contacts": 2, "employees": 3200},
+                {"name": "MedStar Health", "contacts": 1, "employees": 9600},
+                {"name": "Tanner Health", "contacts": 1, "employees": 5000},
+                {"name": "CPS", "contacts": 1, "employees": 1900}
+            ],
+            "Michigan": [
+                {"name": "Ciena Healthcare", "contacts": 2, "employees": 5500},
+                {"name": "Munson Healthcare", "contacts": 1, "employees": 7500},
+                {"name": "The Christ Hospital Health Network", "contacts": 1, "employees": 7000},
+                {"name": "MyMichigan Health", "contacts": 1, "employees": 3200},
+                {"name": "Cape Cod Healthcare", "contacts": 1, "employees": 2300}
+            ],
+            "North Carolina": [
+                {"name": "UNC Health Rex", "contacts": 2, "employees": 6400},
+                {"name": "Vidant Health", "contacts": 1, "employees": 8500},
+                {"name": "Privia Health", "contacts": 1, "employees": 1200},
+                {"name": "Liberty Health", "contacts": 1, "employees": 690},
+                {"name": "CarepathRx", "contacts": 1, "employees": 510}
+            ],
+            "Minnesota": [
+                {"name": "Hennepin Healthcare", "contacts": 2, "employees": 4800},
+                {"name": "The Goodman Group, LLC", "contacts": 1, "employees": 4000},
+                {"name": "Accra", "contacts": 1, "employees": 2000},
+                {"name": "Ecumen", "contacts": 1, "employees": 1500},
+                {"name": "Benedictine", "contacts": 1, "employees": 1200}
+            ],
+            "New Jersey": [
+                {"name": "St. Joseph's Health", "contacts": 2, "employees": 2600},
+                {"name": "CarePoint Health", "contacts": 1, "employees": 3100},
+                {"name": "Inspira Health", "contacts": 1, "employees": 2700},
+                {"name": "Hackensack Meridian Health", "contacts": 1, "employees": 2500},
+                {"name": "AtlantiCare", "contacts": 1, "employees": 1900}
+            ],
+            "South Carolina": [
+                {"name": "McLeod Health", "contacts": 2, "employees": 8500},
+                {"name": "AnMed Health", "contacts": 2, "employees": 4600},
+                {"name": "Roper St. Francis Healthcare", "contacts": 1, "employees": 4200},
+                {"name": "Self Regional Healthcare", "contacts": 1, "employees": 2100},
+                {"name": "Spartanburg Regional Healthcare System", "contacts": 1, "employees": 1800}
+            ],
+            "Kentucky": [
+                {"name": "Norton Healthcare", "contacts": 2, "employees": 9200},
+                {"name": "Appalachian Regional Healthcare", "contacts": 2, "employees": 4300},
+                {"name": "UK HealthCare", "contacts": 1, "employees": 7800},
+                {"name": "Baptist Health", "contacts": 1, "employees": 5400},
+                {"name": "CHI Saint Joseph Health", "contacts": 1, "employees": 3200}
+            ],
+            "Tennessee": [
+                {"name": "Erlanger Health System", "contacts": 2, "employees": 5600},
+                {"name": "Ballad Health", "contacts": 1, "employees": 9100},
+                {"name": "Covenant Health", "contacts": 1, "employees": 6200},
+                {"name": "TriStar Health", "contacts": 1, "employees": 4800},
+                {"name": "Vanderbilt University Medical Center", "contacts": 1, "employees": 4500}
+            ],
+            "Nebraska": [
+                {"name": "Madonna Rehabilitation Hospitals", "contacts": 2, "employees": 2100},
+                {"name": "Bryan Health", "contacts": 2, "employees": 4500},
+                {"name": "CHI Health", "contacts": 1, "employees": 5800},
+                {"name": "Nebraska Medicine", "contacts": 1, "employees": 3900},
+                {"name": "Regional West Health Services", "contacts": 1, "employees": 1200}
+            ],
+            "Connecticut": [
+                {"name": "Hartford HealthCare", "contacts": 2, "employees": 8700},
+                {"name": "Trinity Health Of New England", "contacts": 1, "employees": 6200},
+                {"name": "Yale New Haven Health", "contacts": 1, "employees": 5100},
+                {"name": "Nuvance Health", "contacts": 1, "employees": 3800},
+                {"name": "Stamford Health", "contacts": 1, "employees": 2900}
+            ],
+            "Washington": [
+                {"name": "Providence Health & Services", "contacts": 2, "employees": 9500},
+                {"name": "MultiCare Health System", "contacts": 1, "employees": 7200},
+                {"name": "PeaceHealth", "contacts": 1, "employees": 5600},
+                {"name": "Virginia Mason Franciscan Health", "contacts": 1, "employees": 4800},
+                {"name": "Seattle Children's", "contacts": 1, "employees": 4100}
+            ],
+            "Indiana": [
+                {"name": "Parkview Health", "contacts": 2, "employees": 6800},
+                {"name": "IU Health", "contacts": 1, "employees": 9200},
+                {"name": "Community Health Network", "contacts": 1, "employees": 7100},
+                {"name": "Franciscan Health", "contacts": 1, "employees": 5400},
+                {"name": "Deaconess Health System", "contacts": 1, "employees": 3200}
+            ],
+            "Iowa": [
+                {"name": "UnityPoint Health", "contacts": 2, "employees": 8100},
+                {"name": "MercyOne", "contacts": 2, "employees": 6400},
+                {"name": "University of Iowa Health Care", "contacts": 1, "employees": 5200},
+                {"name": "Genesis Health System", "contacts": 1, "employees": 2800}
+            ],
+            "Wisconsin": [
+                {"name": "Froedtert Health", "contacts": 2, "employees": 7600},
+                {"name": "Marshfield Clinic Health System", "contacts": 1, "employees": 6200},
+                {"name": "Gundersen Health System", "contacts": 1, "employees": 4500},
+                {"name": "Bellin Health", "contacts": 1, "employees": 3100}
+            ],
+            "Colorado": [
+                {"name": "UCHealth", "contacts": 2, "employees": 8400},
+                {"name": "Centura Health", "contacts": 1, "employees": 7100},
+                {"name": "SCL Health", "contacts": 1, "employees": 5200},
+                {"name": "Children's Hospital Colorado", "contacts": 1, "employees": 4600}
+            ],
+            "Missouri": [
+                {"name": "Mercy", "contacts": 2, "employees": 9100},
+                {"name": "BJC HealthCare", "contacts": 1, "employees": 7800},
+                {"name": "SSM Health", "contacts": 1, "employees": 6400},
+                {"name": "CoxHealth", "contacts": 1, "employees": 4200}
+            ],
+            "Louisiana": [
+                {"name": "Ochsner Health", "contacts": 2, "employees": 8900},
+                {"name": "LCMC Health", "contacts": 1, "employees": 6100},
+                {"name": "Our Lady of the Lake Regional Medical Center", "contacts": 1, "employees": 4800}
+            ],
+            "Alabama": [
+                {"name": "UAB Medicine", "contacts": 2, "employees": 7600},
+                {"name": "Huntsville Hospital", "contacts": 1, "employees": 5200},
+                {"name": "Baptist Health System", "contacts": 1, "employees": 4100}
+            ],
+            "Oregon": [
+                {"name": "Legacy Health", "contacts": 2, "employees": 6800},
+                {"name": "Providence Health & Services", "contacts": 1, "employees": 9500},
+                {"name": "OHSU", "contacts": 1, "employees": 5400}
+            ],
+            "Oklahoma": [
+                {"name": "INTEGRIS Health", "contacts": 2, "employees": 7200},
+                {"name": "OU Health", "contacts": 1, "employees": 5100},
+                {"name": "Saint Francis Health System", "contacts": 1, "employees": 4600}
+            ],
+            "Kansas": [
+                {"name": "The University of Kansas Health System", "contacts": 2, "employees": 8100},
+                {"name": "Ascension Via Christi", "contacts": 1, "employees": 4200},
+                {"name": "Stormont Vail Health", "contacts": 1, "employees": 3100}
+            ],
+            "Utah": [
+                {"name": "Intermountain Healthcare", "contacts": 2, "employees": 9800},
+                {"name": "University of Utah Health", "contacts": 1, "employees": 6200},
+                {"name": "MountainStar Healthcare", "contacts": 1, "employees": 3800}
+            ],
+            "Arkansas": [
+                {"name": "Arkansas Children's", "contacts": 2, "employees": 4500},
+                {"name": "Baptist Health", "contacts": 1, "employees": 6100},
+                {"name": "UAMS Health", "contacts": 1, "employees": 5200}
+            ],
+            "Nevada": [
+                {"name": "Renown Health", "contacts": 2, "employees": 5600},
+                {"name": "Dignity Health", "contacts": 1, "employees": 4800}
+            ],
+            "New Hampshire": [
+                {"name": "Dartmouth-Hitchcock Health", "contacts": 2, "employees": 6800},
+                {"name": "Elliot Health System", "contacts": 1, "employees": 2400}
+            ],
+            "West Virginia": [
+                {"name": "WVU Medicine", "contacts": 2, "employees": 7100},
+                {"name": "CAMC Health System", "contacts": 1, "employees": 4200}
+            ]
+        },
+        stateDataInfo: {
+            'New York': {contacts: 57, accounts: 37},
+            'Maryland': {contacts: 30, accounts: 15},
+            'California': {contacts: 29, accounts: 21},
+            'Ohio': {contacts: 29, accounts: 18},
+            'Florida': {contacts: 25, accounts: 18},
+            'Massachusetts': {contacts: 24, accounts: 17},
+            'Texas': {contacts: 21, accounts: 16},
+            'Virginia': {contacts: 20, accounts: 14},
+            'Pennsylvania': {contacts: 14, accounts: 12},
+            'Arizona': {contacts: 11, accounts: 9},
+            'Illinois': {contacts: 11, accounts: 10},
+            'Georgia': {contacts: 11, accounts: 7},
+            'Michigan': {contacts: 10, accounts: 9},
+            'North Carolina': {contacts: 10, accounts: 9},
+            'Minnesota': {contacts: 9, accounts: 8},
+            'New Jersey': {contacts: 8, accounts: 7},
+            'South Carolina': {contacts: 8, accounts: 7},
+            'Kentucky': {contacts: 7, accounts: 6},
+            'Tennessee': {contacts: 7, accounts: 6},
+            'Nebraska': {contacts: 7, accounts: 5},
+            'Connecticut': {contacts: 6, accounts: 5},
+            'Washington': {contacts: 6, accounts: 5},
+            'Indiana': {contacts: 6, accounts: 5},
+            'Iowa': {contacts: 6, accounts: 4},
+            'Wisconsin': {contacts: 5, accounts: 4},
+            'Colorado': {contacts: 5, accounts: 4},
+            'Missouri': {contacts: 5, accounts: 4},
+            'Louisiana': {contacts: 4, accounts: 3},
+            'Alabama': {contacts: 4, accounts: 3},
+            'Oregon': {contacts: 4, accounts: 3},
+            'Oklahoma': {contacts: 4, accounts: 3},
+            'Kansas': {contacts: 4, accounts: 3},
+            'Utah': {contacts: 4, accounts: 3},
+            'Arkansas': {contacts: 4, accounts: 3},
+            'Nevada': {contacts: 3, accounts: 2},
+            'New Hampshire': {contacts: 3, accounts: 2},
+            'West Virginia': {contacts: 3, accounts: 2},
+            'Maine': {contacts: 2, accounts: 2},
+            'Rhode Island': {contacts: 2, accounts: 2},
+            'Delaware': {contacts: 2, accounts: 2},
+            'District of Columbia': {contacts: 2, accounts: 2},
+            'Hawaii': {contacts: 1, accounts: 1},
+            'Idaho': {contacts: 1, accounts: 1},
+            'Montana': {contacts: 1, accounts: 1}
+        },
+        chartsConfig: {
+            seniority: {
+                labels: ['New York', 'Maryland', 'California', 'Ohio', 'Florida', 'Massachusetts', 'Texas', 'Virginia', 'Pennsylvania', 'Arizona'],
+                datasets: [
+                    {label: 'C-Suite (CIO/CTO/CMIO)', data: [96.5, 90.0, 89.7, 100.0, 80.0, 95.8, 81.0, 70.0, 85.7, 90.9], backgroundColor: '#1b5e20'},
+                    {label: 'SVP/EVP', data: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], backgroundColor: '#2e7d32'},
+                    {label: 'Vice President', data: [3.5, 10.0, 6.9, 0.0, 16.0, 0.0, 19.0, 30.0, 14.3, 9.1], backgroundColor: '#43a047'},
+                    {label: 'Director', data: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], backgroundColor: '#66bb6a'},
+                    {label: 'Manager/Senior', data: [0.0, 0.0, 0.0, 0.0, 4.0, 0.0, 0.0, 0.0, 0.0, 0.0], backgroundColor: '#a5d6a7'},
+                    {label: 'Other', data: [0.0, 0.0, 3.4, 0.0, 0.0, 4.2, 0.0, 0.0, 0.0, 0.0], backgroundColor: '#c8e6c9'}
+                ]
+            }
+        }
+    },
+    "law": {
+        label: "⚖️ Law Firms",
+        color1: "#1a1a1a",
+        color2: "#404040",
+        highlight: "#f5f5f5",
+        bg: "#fafafa",
+        description: `Interactive visualization of 702 legal IT decision-makers (CIO/CTOs/CISOs) across 46 states | Click any state to see top accounts`,
+        stats: `<strong>📈 Dataset Summary:</strong><br>                        702 legal IT decision-makers<br>                        579 unique law firms/accounts<br>                        46 states covered<br>                        95.0% C-Suite level contacts`,
+        stateAccountsData: {
+            "New York": [
+                {"name": "Office of the New York State Attorney General", "contacts": 5, "employees": 1700},
+                {"name": "Epiq", "contacts": 3, "employees": 6200},
+                {"name": "Herbert Smith Freehills Kramer", "contacts": 2, "employees": 4600},
+                {"name": "Simpson Thacher & Bartlett LLP", "contacts": 2, "employees": 3500},
+                {"name": "The Legal Aid Society", "contacts": 2, "employees": 3300}
+            ],
+            "California": [
+                {"name": "San Bernardino County", "contacts": 3, "employees": 7100},
+                {"name": "County of San Mateo", "contacts": 3, "employees": 4800},
+                {"name": "LegalZoom", "contacts": 3, "employees": 970},
+                {"name": "Paul Hastings", "contacts": 2, "employees": 3500},
+                {"name": "Gibson Dunn", "contacts": 2, "employees": 2900}
+            ],
+            "Illinois": [
+                {"name": "Jenner & Block", "contacts": 2, "employees": 1200},
+                {"name": "Cook County State's Attorney's Office", "contacts": 2, "employees": 930},
+                {"name": "Illinois Attorney General's Office", "contacts": 2, "employees": 570},
+                {"name": "Chapman and Cutler LLP", "contacts": 2, "employees": 560},
+                {"name": "Amundsen Davis, LLC", "contacts": 2, "employees": 380}
+            ],
+            "Pennsylvania": [
+                {"name": "Morgan, Lewis & Bockius LLP", "contacts": 2, "employees": 5000},
+                {"name": "Buchanan Ingersoll & Rooney PC", "contacts": 2, "employees": 1300},
+                {"name": "Saul Ewing LLP", "contacts": 2, "employees": 1100},
+                {"name": "Dilworth Paxson LLP", "contacts": 2, "employees": 250},
+                {"name": "Obermayer Rebmann Maxwell & Hippel LLP", "contacts": 2, "employees": 150}
+            ],
+            "Texas": [
+                {"name": "Vinson & Elkins", "contacts": 3, "employees": 2100},
+                {"name": "Norton Rose Fulbright", "contacts": 2, "employees": 7000},
+                {"name": "Winstead PC", "contacts": 2, "employees": 790},
+                {"name": "Lexitas", "contacts": 2, "employees": 790},
+                {"name": "Perdue Brandon Fielder Collins & Mott, LLP", "contacts": 2, "employees": 410}
+            ],
+            "Florida": [
+                {"name": "Alvarez & Marsal", "contacts": 2, "employees": 10000},
+                {"name": "Morgan & Morgan, P.A.", "contacts": 2, "employees": 3000},
+                {"name": "Florida Office of the Attorney General", "contacts": 2, "employees": 1500},
+                {"name": "Holland & Knight LLP", "contacts": 1, "employees": 2200},
+                {"name": "Ballard Spahr LLP", "contacts": 1, "employees": 2000}
+            ],
+            "Georgia": [
+                {"name": "Augusta, Georgia Government", "contacts": 2, "employees": 2700},
+                {"name": "Troutman Pepper Locke LLP", "contacts": 2, "employees": 1600},
+                {"name": "Fisher Phillips", "contacts": 2, "employees": 680},
+                {"name": "Alvarez & Marsal", "contacts": 1, "employees": 10000},
+                {"name": "King & Spalding", "contacts": 1, "employees": 3000}
+            ],
+            "Ohio": [
+                {"name": "Ohio Attorney General's Office", "contacts": 3, "employees": 1600},
+                {"name": "Thompson Hine LLP", "contacts": 2, "employees": 960},
+                {"name": "Reminger Co. LPA", "contacts": 2, "employees": 400},
+                {"name": "BakerHostetler", "contacts": 1, "employees": 2200},
+                {"name": "Dinsmore & Shohl LLP", "contacts": 1, "employees": 1700}
+            ],
+            "New Jersey": [
+                {"name": "Alvarez & Marsal", "contacts": 2, "employees": 10000},
+                {"name": "Herbert Smith Freehills Kramer", "contacts": 1, "employees": 4600},
+                {"name": "NYC Department of Correction", "contacts": 1, "employees": 2500},
+                {"name": "Fox Rothschild", "contacts": 1, "employees": 2200},
+                {"name": "Ballard Spahr LLP", "contacts": 1, "employees": 2000}
+            ],
+            "Colorado": [
+                {"name": "Holland & Hart LLP", "contacts": 2, "employees": 1300},
+                {"name": "Brownstein Hyatt Farber Schreck", "contacts": 2, "employees": 880},
+                {"name": "PPLSI", "contacts": 1, "employees": 4700},
+                {"name": "Elevate", "contacts": 1, "employees": 1900},
+                {"name": "Womble Bond Dickinson (US) LLP", "contacts": 1, "employees": 1900}
+            ],
+            "Massachusetts": [
+                {"name": "Sullivan & Worcester LLP", "contacts": 2, "employees": 370},
+                {"name": "Hogan Lovells", "contacts": 1, "employees": 7600},
+                {"name": "Epiq", "contacts": 1, "employees": 6200},
+                {"name": "Covington & Burling LLP", "contacts": 1, "employees": 3100},
+                {"name": "Mintz", "contacts": 1, "employees": 1600}
+            ],
+            "District of Columbia": [
+                {"name": "Williams & Connolly LLP", "contacts": 2, "employees": 560},
+                {"name": "Association of Corporate Counsel", "contacts": 2, "employees": 320},
+                {"name": "White & Case LLP", "contacts": 1, "employees": 4800},
+                {"name": "Covington & Burling LLP", "contacts": 1, "employees": 3100},
+                {"name": "Foley & Lardner LLP", "contacts": 1, "employees": 3100}
+            ],
+            "Virginia": [
+                {"name": "McGuireWoods LLP", "contacts": 2, "employees": 2500},
+                {"name": "Alvarez & Marsal", "contacts": 1, "employees": 10000},
+                {"name": "Greenberg Traurig, LLP", "contacts": 1, "employees": 5000},
+                {"name": "K&L Gates", "contacts": 1, "employees": 4800},
+                {"name": "Goodwin", "contacts": 1, "employees": 3900}
+            ],
+            "Maryland": [
+                {"name": "Latham & Watkins", "contacts": 1, "employees": 8500},
+                {"name": "Foley & Lardner LLP", "contacts": 1, "employees": 3100},
+                {"name": "Venable LLP", "contacts": 1, "employees": 1900},
+                {"name": "Blank Rome LLP", "contacts": 1, "employees": 1800},
+                {"name": "McDermott Will & Emery", "contacts": 1, "employees": 1500}
+            ],
+            "Washington": [
+                {"name": "Washington State Administrative Office of the Courts", "contacts": 2, "employees": 260},
+                {"name": "JND Legal Administration", "contacts": 2, "employees": 250},
+                {"name": "Multnomah County", "contacts": 1, "employees": 6300},
+                {"name": "Perkins Coie", "contacts": 1, "employees": 2300},
+                {"name": "Axiom", "contacts": 1, "employees": 2000}
+            ],
+            "Tennessee": [
+                {"name": "Baker Donelson", "contacts": 2, "employees": 1700},
+                {"name": "Butler Snow LLP", "contacts": 2, "employees": 820},
+                {"name": "Waller Lansden Dortch & Davis", "contacts": 1, "employees": 750},
+                {"name": "Bradley Arant Boult Cummings LLP", "contacts": 1, "employees": 700},
+                {"name": "Bass, Berry & Sims", "contacts": 1, "employees": 600}
+            ],
+            "Oregon": [
+                {"name": "Miller Nash LLP", "contacts": 2, "employees": 300},
+                {"name": "Oregon Judicial Department", "contacts": 2, "employees": 290},
+                {"name": "Stoel Rives LLP", "contacts": 1, "employees": 680},
+                {"name": "Davis Wright Tremaine LLP", "contacts": 1, "employees": 500},
+                {"name": "High Desert Education Service District", "contacts": 1, "employees": 320}
+            ],
+            "Alabama": [
+                {"name": "Lightfoot, Franklin & White LLC", "contacts": 2, "employees": 250},
+                {"name": "Bradley Arant Boult Cummings LLP", "contacts": 1, "employees": 700},
+                {"name": "Burr & Forman LLP", "contacts": 1, "employees": 580},
+                {"name": "Maynard Nexsen PC", "contacts": 1, "employees": 570},
+                {"name": "Hand Arendall Harrison Sale LLC", "contacts": 1, "employees": 200}
+            ],
+            "Arizona": [
+                {"name": "Gallagher & Kennedy", "contacts": 2, "employees": 230},
+                {"name": "Quarles & Brady LLP", "contacts": 1, "employees": 1100},
+                {"name": "Fennemore", "contacts": 1, "employees": 430},
+                {"name": "Snell & Wilmer L.L.P.", "contacts": 1, "employees": 400},
+                {"name": "Tiffany & Bosco, P.A.", "contacts": 1, "employees": 130}
+            ],
+            "North Carolina": [
+                {"name": "Moore & Van Allen", "contacts": 2, "employees": 680},
+                {"name": "Kilpatrick Townsend & Stockton LLP", "contacts": 1, "employees": 1600},
+                {"name": "Parker Poe Adams & Bernstein LLP", "contacts": 1, "employees": 550},
+                {"name": "Ward and Smith, P.A.", "contacts": 1, "employees": 320},
+                {"name": "Smith Anderson", "contacts": 1, "employees": 290}
+            ],
+            "Minnesota": [
+                {"name": "Fredrikson & Byron", "contacts": 2, "employees": 500},
+                {"name": "Dorsey & Whitney LLP", "contacts": 1, "employees": 1400},
+                {"name": "Faegre Drinker Biddle & Reath LLP", "contacts": 1, "employees": 1300},
+                {"name": "Maslon LLP", "contacts": 1, "employees": 220},
+                {"name": "Anthony Ostlund Louwagie Dressen & Boylan P.A.", "contacts": 1, "employees": 60}
+            ],
+            "Wisconsin": [
+                {"name": "Foley & Lardner LLP", "contacts": 2, "employees": 3100},
+                {"name": "Quarles & Brady LLP", "contacts": 1, "employees": 1100},
+                {"name": "Michael Best & Friedrich LLP", "contacts": 1, "employees": 620},
+                {"name": "von Briesen & Roper, s.c.", "contacts": 1, "employees": 280},
+                {"name": "Davis|Kuelthau", "contacts": 1, "employees": 150}
+            ],
+            "South Carolina": [
+                {"name": "Maynard Nexsen PC", "contacts": 2, "employees": 570},
+                {"name": "McAngus Goudelock & Courie", "contacts": 2, "employees": 360},
+                {"name": "Haynsworth Sinkler Boyd, P.A.", "contacts": 1, "employees": 290},
+                {"name": "Nelson Mullins Riley & Scarborough LLP", "contacts": 1, "employees": 200},
+                {"name": "Parker Poe Adams & Bernstein LLP", "contacts": 1, "employees": 550}
+            ],
+            "Michigan": [
+                {"name": "Bodman PLC", "contacts": 2, "employees": 270},
+                {"name": "Miller Canfield", "contacts": 1, "employees": 700},
+                {"name": "Dickinson Wright PLLC", "contacts": 1, "employees": 650},
+                {"name": "Honigman LLP", "contacts": 1, "employees": 600},
+                {"name": "Varnum LLP", "contacts": 1, "employees": 450}
+            ],
+            "Connecticut": [
+                {"name": "Robinson & Cole LLP", "contacts": 2, "employees": 590},
+                {"name": "Day Pitney LLP", "contacts": 1, "employees": 780},
+                {"name": "Shipman & Goodwin LLP", "contacts": 1, "employees": 520},
+                {"name": "Pullman & Comley, LLC", "contacts": 1, "employees": 220},
+                {"name": "Murtha Cullina LLP", "contacts": 1, "employees": 180}
+            ],
+            "Missouri": [
+                {"name": "Thompson Coburn LLP", "contacts": 2, "employees": 920},
+                {"name": "Polsinelli", "contacts": 1, "employees": 1800},
+                {"name": "Husch Blackwell", "contacts": 1, "employees": 1600},
+                {"name": "Bryan Cave Leighton Paisner", "contacts": 1, "employees": 1400},
+                {"name": "Lathrop GPM LLP", "contacts": 1, "employees": 620}
+            ],
+            "Nevada": [
+                {"name": "Brownstein Hyatt Farber Schreck", "contacts": 1, "employees": 880},
+                {"name": "Fennemore", "contacts": 1, "employees": 430},
+                {"name": "McDonald Carano", "contacts": 1, "employees": 200},
+                {"name": "Hutchison & Steffen", "contacts": 1, "employees": 110},
+                {"name": "Kolesar & Leatham", "contacts": 1, "employees": 70}
+            ],
+            "Indiana": [
+                {"name": "Barnes & Thornburg LLP", "contacts": 2, "employees": 1500},
+                {"name": "Ice Miller LLP", "contacts": 1, "employees": 720},
+                {"name": "Faegre Drinker Biddle & Reath LLP", "contacts": 1, "employees": 1300},
+                {"name": "Bose McKinney & Evans LLP", "contacts": 1, "employees": 310},
+                {"name": "Frost Brown Todd LLC", "contacts": 1, "employees": 290}
+            ],
+            "Louisiana": [
+                {"name": "Kean Miller LLP", "contacts": 2, "employees": 330},
+                {"name": "Jones Walker LLP", "contacts": 1, "employees": 770},
+                {"name": "McGlinchey Stafford", "contacts": 1, "employees": 450},
+                {"name": "Phelps Dunbar LLP", "contacts": 1, "employees": 400}
+            ],
+            "Utah": [
+                {"name": "Holland & Hart LLP", "contacts": 1, "employees": 1300},
+                {"name": "Parr Brown Gee & Loveless", "contacts": 1, "employees": 120},
+                {"name": "Kirton McConkie", "contacts": 1, "employees": 350},
+                {"name": "Parsons Behle & Latimer", "contacts": 1, "employees": 200}
+            ],
+            "Kentucky": [
+                {"name": "Stites & Harbison, PLLC", "contacts": 1, "employees": 450},
+                {"name": "Frost Brown Todd LLC", "contacts": 1, "employees": 290},
+                {"name": "Wyatt, Tarrant & Combs, LLP", "contacts": 1, "employees": 360},
+                {"name": "Dinsmore & Shohl LLP", "contacts": 1, "employees": 1700}
+            ],
+            "Oklahoma": [
+                {"name": "GableGotwals", "contacts": 1, "employees": 170},
+                {"name": "McAfee & Taft", "contacts": 1, "employees": 320},
+                {"name": "Crowe & Dunlevy", "contacts": 1, "employees": 250}
+            ],
+            "Iowa": [
+                {"name": "Nyemaster Goode, P.C.", "contacts": 1, "employees": 200},
+                {"name": "BrownWinick Law Firm", "contacts": 1, "employees": 140},
+                {"name": "Dorsey & Whitney LLP", "contacts": 1, "employees": 1400}
+            ],
+            "Kansas": [
+                {"name": "Polsinelli", "contacts": 1, "employees": 1800},
+                {"name": "Shook, Hardy & Bacon L.L.P.", "contacts": 1, "employees": 1100},
+                {"name": "Lathrop GPM LLP", "contacts": 1, "employees": 620}
+            ],
+            "New Mexico": [
+                {"name": "Modrall Sperling", "contacts": 1, "employees": 120},
+                {"name": "Rodey, Dickason, Sloan, Akin & Robb", "contacts": 1, "employees": 150}
+            ],
+            "Nebraska": [
+                {"name": "Kutak Rock LLP", "contacts": 1, "employees": 700},
+                {"name": "Baird Holm LLP", "contacts": 1, "employees": 220}
+            ],
+            "Arkansas": [
+                {"name": "Wright Lindsey Jennings", "contacts": 1, "employees": 150},
+                {"name": "Friday, Eldredge & Clark, LLP", "contacts": 1, "employees": 140}
+            ],
+            "Idaho": [
+                {"name": "Hawley Troxell", "contacts": 1, "employees": 130},
+                {"name": "Holland & Hart LLP", "contacts": 1, "employees": 1300}
+            ],
+            "Delaware": [
+                {"name": "Morris, Nichols, Arsht & Tunnell LLP", "contacts": 1, "employees": 360},
+                {"name": "Richards, Layton & Finger, P.A.", "contacts": 1, "employees": 280}
+            ],
+            "West Virginia": [
+                {"name": "Spilman Thomas & Battle, PLLC", "contacts": 1, "employees": 290},
+                {"name": "Jackson Kelly PLLC", "contacts": 1, "employees": 450}
+            ],
+            "Mississippi": [
+                {"name": "Butler Snow LLP", "contacts": 1, "employees": 820},
+                {"name": "Phelps Dunbar LLP", "contacts": 1, "employees": 400}
+            ],
+            "New Hampshire": [
+                {"name": "McLane Middleton", "contacts": 1, "employees": 250},
+                {"name": "Sheehan Phinney Bass & Green PA", "contacts": 1, "employees": 170}
+            ],
+            "Alaska": [
+                {"name": "Perkins Coie", "contacts": 1, "employees": 2300}
+            ],
+            "Rhode Island": [
+                {"name": "Robinson & Cole LLP", "contacts": 1, "employees": 590}
+            ],
+            "Hawaii": [
+                {"name": "Carlsmith Ball LLP", "contacts": 1, "employees": 150}
+            ],
+            "Maine": [
+                {"name": "Pierce Atwood LLP", "contacts": 1, "employees": 400}
+            ],
+            "Montana": [
+                {"name": "Crowley Fleck PLLP", "contacts": 1, "employees": 260}
+            ],
+            "North Dakota": [
+                {"name": "Vogel Law Firm", "contacts": 1, "employees": 120}
+            ],
+            "Wyoming": [
+                {"name": "Holland & Hart LLP", "contacts": 1, "employees": 1300}
+            ],
+            "Vermont": [
+                {"name": "Downs Rachlin Martin PLLC", "contacts": 1, "employees": 180}
+            ]
+        },
+        stateDataInfo: {
+            'New York': {contacts: 107, accounts: 89},
+            'California': {contacts: 76, accounts: 64},
+            'Illinois': {contacts: 48, accounts: 41},
+            'Pennsylvania': {contacts: 46, accounts: 40},
+            'Texas': {contacts: 44, accounts: 38},
+            'Florida': {contacts: 41, accounts: 38},
+            'Georgia': {contacts: 26, accounts: 23},
+            'Ohio': {contacts: 24, accounts: 20},
+            'New Jersey': {contacts: 23, accounts: 22},
+            'Colorado': {contacts: 21, accounts: 19},
+            'Massachusetts': {contacts: 20, accounts: 19},
+            'District of Columbia': {contacts: 17, accounts: 15},
+            'Virginia': {contacts: 16, accounts: 15},
+            'Maryland': {contacts: 16, accounts: 16},
+            'Washington': {contacts: 15, accounts: 13},
+            'Tennessee': {contacts: 14, accounts: 12},
+            'Oregon': {contacts: 11, accounts: 9},
+            'Alabama': {contacts: 10, accounts: 9},
+            'Arizona': {contacts: 10, accounts: 9},
+            'North Carolina': {contacts: 10, accounts: 9},
+            'Minnesota': {contacts: 9, accounts: 8},
+            'Wisconsin': {contacts: 8, accounts: 7},
+            'South Carolina': {contacts: 8, accounts: 7},
+            'Michigan': {contacts: 8, accounts: 7},
+            'Connecticut': {contacts: 7, accounts: 6},
+            'Missouri': {contacts: 7, accounts: 6},
+            'Nevada': {contacts: 6, accounts: 6},
+            'Indiana': {contacts: 6, accounts: 5},
+            'Louisiana': {contacts: 5, accounts: 4},
+            'Utah': {contacts: 4, accounts: 4},
+            'Kentucky': {contacts: 4, accounts: 4},
+            'Oklahoma': {contacts: 3, accounts: 3},
+            'Iowa': {contacts: 3, accounts: 3},
+            'Kansas': {contacts: 3, accounts: 3},
+            'New Mexico': {contacts: 2, accounts: 2},
+            'Nebraska': {contacts: 2, accounts: 2},
+            'Arkansas': {contacts: 2, accounts: 2},
+            'Idaho': {contacts: 2, accounts: 2},
+            'Delaware': {contacts: 2, accounts: 2},
+            'West Virginia': {contacts: 2, accounts: 2},
+            'Mississippi': {contacts: 2, accounts: 2},
+            'New Hampshire': {contacts: 2, accounts: 2},
+            'Alaska': {contacts: 1, accounts: 1},
+            'Rhode Island': {contacts: 1, accounts: 1},
+            'Hawaii': {contacts: 1, accounts: 1},
+            'Maine': {contacts: 1, accounts: 1},
+            'Montana': {contacts: 1, accounts: 1},
+            'North Dakota': {contacts: 1, accounts: 1},
+            'Wyoming': {contacts: 1, accounts: 1},
+            'Vermont': {contacts: 1, accounts: 1}
+        },
+        chartsConfig: {
+            seniority: {
+                labels: ['New York', 'California', 'Illinois', 'Pennsylvania', 'Texas', 'Florida', 'Georgia', 'Ohio', 'New Jersey', 'Colorado'],
+                datasets: [
+                    {label: 'C-Suite (CIO/CTO/CISO)', data: [94.4, 92.1, 91.7, 93.5, 97.7, 100.0, 96.2, 100.0, 100.0, 95.2], backgroundColor: '#1a1a1a'},
+                    {label: 'EVP/SVP', data: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], backgroundColor: '#404040'},
+                    {label: 'Vice President', data: [3.7, 5.3, 2.1, 4.3, 0.0, 0.0, 0.0, 0.0, 0.0, 4.8], backgroundColor: '#666666'},
+                    {label: 'Director', data: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], backgroundColor: '#8c8c8c'},
+                    {label: 'Manager/Senior', data: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], backgroundColor: '#b3b3b3'},
+                    {label: 'Other', data: [1.9, 1.3, 4.2, 2.2, 2.3, 0.0, 3.8, 0.0, 0.0, 0.0], backgroundColor: '#d9d9d9'}
+                ]
+            }
+        }
+    },
+    "fleet": {
+        label: "🚛 Fleet Operators",
+        color1: "#d35400",
+        color2: "#e67e22",
+        highlight: "#fef5e7",
+        bg: "#fef9f3",
+        description: `Interactive visualization of 484 fleet IT decision-makers (CIO/CTOs) across 42 states | Click any state to see top accounts`,
+        stats: `<strong>📈 Dataset Summary:</strong><br>                        484 fleet IT decision-makers<br>                        377 unique accounts<br>                        42 states covered<br>                        90.5% C-Suite level contacts`,
+        stateAccountsData: {
+            "California": [
+                {"name": "California High-Speed Rail Authority", "contacts": 3, "employees": 350},
+                {"name": "Matson, Inc.", "contacts": 2, "employees": 4400},
+                {"name": "BART", "contacts": 2, "employees": 4300},
+                {"name": "ShipBob", "contacts": 2, "employees": 1600},
+                {"name": "Orange County Transportation Authority", "contacts": 2, "employees": 1400}
+            ],
+            "Texas": [
+                {"name": "Metropolitan Transit Authority of Harris County", "contacts": 3, "employees": 3800},
+                {"name": "FleetPride", "contacts": 3, "employees": 2500},
+                {"name": "All My Sons Moving & Storage", "contacts": 2, "employees": 2200},
+                {"name": "CapMetro", "contacts": 2, "employees": 670},
+                {"name": "MODE Global", "contacts": 2, "employees": 650}
+            ],
+            "Illinois": [
+                {"name": "Redwood", "contacts": 3, "employees": 800},
+                {"name": "Echo Global Logistics", "contacts": 2, "employees": 2600},
+                {"name": "Lawson Products", "contacts": 2, "employees": 1900},
+                {"name": "SEKO Logistics", "contacts": 1, "employees": 3200},
+                {"name": "Metra Commuter Rail", "contacts": 1, "employees": 2800}
+            ],
+            "Florida": [
+                {"name": "TBC Corporation", "contacts": 3, "employees": 3900},
+                {"name": "Landstar System", "contacts": 2, "employees": 1400},
+                {"name": "BlueGrace Logistics", "contacts": 2, "employees": 760},
+                {"name": "Eclipse Advantage", "contacts": 2, "employees": 500},
+                {"name": "Quality One", "contacts": 2, "employees": 110}
+            ],
+            "Pennsylvania": [
+                {"name": "Pennsylvania Turnpike Commission", "contacts": 4, "employees": 790},
+                {"name": "Penn Tank Lines", "contacts": 2, "employees": 230},
+                {"name": "Clarience Technologies", "contacts": 1, "employees": 4200},
+                {"name": "PITT OHIO", "contacts": 1, "employees": 3400},
+                {"name": "GE Transportation, a Wabtec company", "contacts": 1, "employees": 2700}
+            ],
+            "North Carolina": [
+                {"name": "Fusion Transport", "contacts": 3, "employees": 230},
+                {"name": "Odyssey Logistics", "contacts": 2, "employees": 790},
+                {"name": "U.S. Venture, Inc.", "contacts": 1, "employees": 4500},
+                {"name": "American Tire Distributors", "contacts": 1, "employees": 4500},
+                {"name": "NCDOT", "contacts": 1, "employees": 3800}
+            ],
+            "Georgia": [
+                {"name": "Veritiv", "contacts": 2, "employees": 5000},
+                {"name": "Georgia Department of Transportation", "contacts": 2, "employees": 2200},
+                {"name": "FORTNA", "contacts": 2, "employees": 1700},
+                {"name": "SMC³", "contacts": 2, "employees": 200},
+                {"name": "Great Dane", "contacts": 1, "employees": 2900}
+            ],
+            "Washington": [
+                {"name": "Sound Transit", "contacts": 3, "employees": 1800},
+                {"name": "DAT Freight & Analytics", "contacts": 2, "employees": 1100},
+                {"name": "Community Transit", "contacts": 2, "employees": 570},
+                {"name": "Crane Worldwide Logistics", "contacts": 1, "employees": 3400},
+                {"name": "Apex Logistics International", "contacts": 1, "employees": 2500}
+            ],
+            "New York": [
+                {"name": "Imperial Dade", "contacts": 2, "employees": 2500},
+                {"name": "Truckstop", "contacts": 1, "employees": 1800},
+                {"name": "New York City Department of Transportation", "contacts": 1, "employees": 1800},
+                {"name": "ModusLink", "contacts": 1, "employees": 1300},
+                {"name": "STG Logistics", "contacts": 1, "employees": 1100}
+            ],
+            "Tennessee": [
+                {"name": "American Tire Distributors", "contacts": 1, "employees": 4500},
+                {"name": "Kenco Group", "contacts": 1, "employees": 3200},
+                {"name": "FirstFleet, Inc.", "contacts": 1, "employees": 3200},
+                {"name": "MARTA", "contacts": 1, "employees": 2700},
+                {"name": "Crete Carrier Corporation", "contacts": 1, "employees": 2600}
+            ],
+            "Missouri": [
+                {"name": "Shamrock Trading Corporation", "contacts": 2, "employees": 1300},
+                {"name": "AITX", "contacts": 2, "employees": 670},
+                {"name": "Quantix", "contacts": 1, "employees": 2700},
+                {"name": "PAM Transport", "contacts": 1, "employees": 2600},
+                {"name": "UniGroup", "contacts": 1, "employees": 970}
+            ],
+            "Virginia": [
+                {"name": "UPS Freight", "contacts": 1, "employees": 4100},
+                {"name": "Landstar System", "contacts": 1, "employees": 1400},
+                {"name": "TransForce", "contacts": 1, "employees": 1100},
+                {"name": "American Commercial Barge Line", "contacts": 1, "employees": 1100},
+                {"name": "Century Distribution Systems", "contacts": 1, "employees": 1100}
+            ],
+            "Ohio": [
+                {"name": "Ohio Department of Transportation", "contacts": 2, "employees": 2000},
+                {"name": "TREW", "contacts": 2, "employees": 480},
+                {"name": "Dayton Freight Lines, Inc.", "contacts": 1, "employees": 2000},
+                {"name": "Central Ohio Transit Authority", "contacts": 1, "employees": 1100},
+                {"name": "ODW Logistics", "contacts": 1, "employees": 1100}
+            ],
+            "Michigan": [
+                {"name": "RPM", "contacts": 2, "employees": 960},
+                {"name": "Argus Logistics", "contacts": 2, "employees": 160},
+                {"name": "Clarience Technologies", "contacts": 1, "employees": 4200},
+                {"name": "TransPak", "contacts": 1, "employees": 1200},
+                {"name": "Torc Robotics", "contacts": 1, "employees": 880}
+            ],
+            "New Jersey": [
+                {"name": "Imperial Dade", "contacts": 1, "employees": 2500},
+                {"name": "TricorBraun", "contacts": 1, "employees": 2000},
+                {"name": "Shipco Transport", "contacts": 1, "employees": 1700},
+                {"name": "Capacity", "contacts": 1, "employees": 970},
+                {"name": "SDI", "contacts": 1, "employees": 630}
+            ],
+            "Minnesota": [
+                {"name": "Redwood", "contacts": 1, "employees": 800},
+                {"name": "Allstate Peterbilt Group", "contacts": 1, "employees": 750},
+                {"name": "Beltmann Relocation Group", "contacts": 1, "employees": 660},
+                {"name": "Allyn International", "contacts": 1, "employees": 580},
+                {"name": "Bay and Bay Transportation", "contacts": 1, "employees": 410}
+            ],
+            "Indiana": [
+                {"name": "Lazer Logistics", "contacts": 1, "employees": 5800},
+                {"name": "Mr. Bult's", "contacts": 1, "employees": 1400},
+                {"name": "Atlas Van Lines Agent-Smith Van & Storage", "contacts": 1, "employees": 1300},
+                {"name": "Parts Town", "contacts": 1, "employees": 810},
+                {"name": "Cox Automotive", "contacts": 1, "employees": 610}
+            ],
+            "Wisconsin": [
+                {"name": "U.S. Venture, Inc.", "contacts": 2, "employees": 4500},
+                {"name": "Roehl Transport", "contacts": 1, "employees": 3000},
+                {"name": "Traffic Tech", "contacts": 1, "employees": 1400},
+                {"name": "Milwaukee County Transit System", "contacts": 1, "employees": 1100},
+                {"name": "Endries International, Inc.", "contacts": 1, "employees": 640}
+            ],
+            "Massachusetts": [
+                {"name": "Keolis Commuter Services", "contacts": 1, "employees": 2500},
+                {"name": "Barrett Distribution Centers", "contacts": 1, "employees": 1000},
+                {"name": "Keolis North America", "contacts": 1, "employees": 880},
+                {"name": "McAllister Towing", "contacts": 1, "employees": 600},
+                {"name": "Kaleris", "contacts": 1, "employees": 540}
+            ],
+            "Colorado": [
+                {"name": "RTD", "contacts": 2, "employees": 3700},
+                {"name": "Warehouse Anywhere", "contacts": 1, "employees": 2400},
+                {"name": "QuickBox Fulfillment", "contacts": 1, "employees": 240},
+                {"name": "OneRail", "contacts": 1, "employees": 190},
+                {"name": "PS Technology", "contacts": 1, "employees": 110}
+            ],
+            "Iowa": [
+                {"name": "Ruan Transportation Management Systems", "contacts": 2, "employees": 2300},
+                {"name": "ACERTUS", "contacts": 1, "employees": 560},
+                {"name": "Wilson Trailer", "contacts": 1, "employees": 250},
+                {"name": "JT Logistics", "contacts": 1, "employees": 170},
+                {"name": "DART - Des Moines Area Regional Transit Authority", "contacts": 1, "employees": 120}
+            ],
+            "Connecticut": [
+                {"name": "Freepoint Commodities", "contacts": 2, "employees": 460},
+                {"name": "AIT Worldwide Logistics", "contacts": 1, "employees": 2700},
+                {"name": "BTX Global Logistics", "contacts": 1, "employees": 390},
+                {"name": "Meyer", "contacts": 1, "employees": 200}
+            ],
+            "Alabama": [
+                {"name": "Burris Logistics", "contacts": 1, "employees": 2500},
+                {"name": "TA Services", "contacts": 1, "employees": 510},
+                {"name": "Cryoport Systems", "contacts": 1, "employees": 310},
+                {"name": "Paul Logistics", "contacts": 1, "employees": 190},
+                {"name": "Port of Mobile", "contacts": 1, "employees": 180}
+            ],
+            "South Carolina": [
+                {"name": "Benore Logistic Systems", "contacts": 1, "employees": 1300},
+                {"name": "Gexpro Services", "contacts": 1, "employees": 330},
+                {"name": "JEAR Logistics, LLC", "contacts": 1, "employees": 270},
+                {"name": "Mariner", "contacts": 1, "employees": 120}
+            ],
+            "Oregon": [
+                {"name": "TriMet", "contacts": 1, "employees": 3400},
+                {"name": "TEC Equipment", "contacts": 1, "employees": 1400},
+                {"name": "Mallory Safety and Supply", "contacts": 1, "employees": 380}
+            ],
+            "Louisiana": [
+                {"name": "Dupré Logistics", "contacts": 1, "employees": 1100},
+                {"name": "United Vision Logistics", "contacts": 1, "employees": 590},
+                {"name": "CRC Global Solutions", "contacts": 1, "employees": 120}
+            ],
+            "Kansas": [
+                {"name": "Shamrock Trading Corporation", "contacts": 2, "employees": 1300},
+                {"name": "KCATA", "contacts": 1, "employees": 770}
+            ],
+            "Kentucky": [
+                {"name": "FORTNA", "contacts": 1, "employees": 1700},
+                {"name": "Enstructure", "contacts": 1, "employees": 190},
+                {"name": "Venture Express Inc.", "contacts": 1, "employees": 130}
+            ],
+            "Mississippi": [
+                {"name": "IMC Logistics", "contacts": 1, "employees": 980},
+                {"name": "Mallory Alexander International Logistics", "contacts": 1, "employees": 400},
+                {"name": "Jordan Carriers", "contacts": 1, "employees": 240}
+            ],
+            "Arizona": [
+                {"name": "Ascent Global Logistics", "contacts": 1, "employees": 700},
+                {"name": "Knight-Swift Transportation", "contacts": 1, "employees": 310},
+                {"name": "FlexiVan", "contacts": 1, "employees": 240}
+            ],
+            "Arkansas": [
+                {"name": "Watco Companies LLC", "contacts": 1, "employees": 4900},
+                {"name": "Priority1", "contacts": 1, "employees": 1900},
+                {"name": "Maverick Transportation, LLC", "contacts": 1, "employees": 890}
+            ],
+            "District of Columbia": [
+                {"name": "BART", "contacts": 1, "employees": 4300},
+                {"name": "Metro-North Railroad", "contacts": 1, "employees": 2400},
+                {"name": "JK Moving Services", "contacts": 1, "employees": 1100}
+            ],
+            "Nebraska": [
+                {"name": "Scoular", "contacts": 1, "employees": 930},
+                {"name": "Truck Center Companies", "contacts": 1, "employees": 830}
+            ],
+            "Utah": [
+                {"name": "Hirschbach", "contacts": 1, "employees": 1000},
+                {"name": "Dunavant", "contacts": 1, "employees": 490}
+            ],
+            "Idaho": [
+                {"name": "Truckstop", "contacts": 2, "employees": 1800}
+            ],
+            "Maryland": [
+                {"name": "Carey Main", "contacts": 1, "employees": 670},
+                {"name": "District Department of Transportation (DDOT)", "contacts": 1, "employees": 520}
+            ],
+            "Alaska": [
+                {"name": "Carlile Transportation", "contacts": 1, "employees": 310}
+            ],
+            "Delaware": [
+                {"name": "Trinity Logistics", "contacts": 1, "employees": 960}
+            ],
+            "Nevada": [
+                {"name": "Utah Transit Authority", "contacts": 1, "employees": 3000}
+            ],
+            "New Hampshire": [
+                {"name": "Berkshire Grey", "contacts": 1, "employees": 280}
+            ],
+            "New Mexico": [
+                {"name": "Mesilla Valley Transportation", "contacts": 1, "employees": 690}
+            ],
+            "Oklahoma": [
+                {"name": "Melton Truck Lines", "contacts": 1, "employees": 1500}
+            ]
+        },
+        stateDataInfo: {
+            'California': {contacts: 65, accounts: 57},
+            'Texas': {contacts: 43, accounts: 34},
+            'Illinois': {contacts: 41, accounts: 37},
+            'Florida': {contacts: 31, accounts: 25},
+            'Pennsylvania': {contacts: 25, accounts: 21},
+            'North Carolina': {contacts: 24, accounts: 21},
+            'Georgia': {contacts: 23, accounts: 19},
+            'Washington': {contacts: 20, accounts: 16},
+            'New York': {contacts: 19, accounts: 18},
+            'Tennessee': {contacts: 15, accounts: 15},
+            'Missouri': {contacts: 14, accounts: 12},
+            'Virginia': {contacts: 13, accounts: 13},
+            'Ohio': {contacts: 13, accounts: 11},
+            'Michigan': {contacts: 13, accounts: 11},
+            'New Jersey': {contacts: 12, accounts: 12},
+            'Minnesota': {contacts: 10, accounts: 10},
+            'Indiana': {contacts: 10, accounts: 10},
+            'Wisconsin': {contacts: 9, accounts: 8},
+            'Massachusetts': {contacts: 9, accounts: 9},
+            'Colorado': {contacts: 6, accounts: 5},
+            'Iowa': {contacts: 6, accounts: 5},
+            'Connecticut': {contacts: 5, accounts: 4},
+            'Alabama': {contacts: 5, accounts: 5},
+            'South Carolina': {contacts: 4, accounts: 4},
+            'Oregon': {contacts: 3, accounts: 3},
+            'Louisiana': {contacts: 3, accounts: 3},
+            'Kansas': {contacts: 3, accounts: 2},
+            'Kentucky': {contacts: 3, accounts: 3},
+            'Mississippi': {contacts: 3, accounts: 3},
+            'Arizona': {contacts: 3, accounts: 3},
+            'Arkansas': {contacts: 3, accounts: 3},
+            'District of Columbia': {contacts: 3, accounts: 3},
+            'Nebraska': {contacts: 2, accounts: 2},
+            'Utah': {contacts: 2, accounts: 2},
+            'Idaho': {contacts: 2, accounts: 1},
+            'Maryland': {contacts: 2, accounts: 2},
+            'Alaska': {contacts: 1, accounts: 1},
+            'Delaware': {contacts: 1, accounts: 1},
+            'Nevada': {contacts: 1, accounts: 1},
+            'New Hampshire': {contacts: 1, accounts: 1},
+            'New Mexico': {contacts: 1, accounts: 1},
+            'Oklahoma': {contacts: 1, accounts: 1}
+        },
+        chartsConfig: {
+            seniority: {
+                labels: ['California', 'Texas', 'Illinois', 'Florida', 'Pennsylvania', 'North Carolina', 'Georgia', 'Washington', 'New York', 'Tennessee'],
+                datasets: [
+                    {label: 'C-Suite (CIO/CTO)', data: [93.8, 93.0, 85.4, 96.8, 96.0, 83.3, 95.7, 90.0, 84.2, 93.3], backgroundColor: '#d35400'},
+                    {label: 'EVP/SVP', data: [0.0, 0.0, 2.4, 0.0, 0.0, 0.0, 4.3, 0.0, 0.0, 0.0], backgroundColor: '#e67e22'},
+                    {label: 'Vice President', data: [6.2, 7.0, 12.2, 3.2, 0.0, 16.7, 0.0, 5.0, 15.8, 6.7], backgroundColor: '#f39c12'},
+                    {label: 'Director', data: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], backgroundColor: '#f5b041'},
+                    {label: 'Manager', data: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], backgroundColor: '#f8c471'},
+                    {label: 'Other', data: [0.0, 0.0, 0.0, 0.0, 4.0, 0.0, 0.0, 5.0, 0.0, 0.0], backgroundColor: '#fad7a0'}
+                ]
+            }
+        }
+    }
+};
+
+
+
+
+        // Color schemes for each industry
+        const colorSchemes = {
+            banking: {
+                levels: ['#01579b', '#0277bd', '#0288d1', '#039be5', '#29b6f6', '#4fc3f7', '#81d4fa', '#b3e5fc'],
+                thresholds: [200, 150, 100, 50, 25, 10, 5, 1]
+            },
+            manufacturing: {
+                levels: ['#4a0000', '#7f0000', '#b71c1c', '#c62828', '#e53935', '#ef5350', '#ef9a9a', '#ffcdd2'],
+                thresholds: [150, 100, 60, 40, 20, 10, 5, 1]
+            },
+            food_beverage: {
+                levels: ['#311b92', '#4527a0', '#512da8', '#7b1fa2', '#9c27b0', '#ba68c8', '#ce93d8', '#e1bee7'],
+                thresholds: [100, 75, 50, 30, 20, 10, 5, 1]
+            },
+            hospice: {
+                levels: ['#003300', '#1b5e20', '#2e7d32', '#388e3c', '#43a047', '#66bb6a', '#a5d6a7', '#c8e6c9'],
+                thresholds: [50, 40, 30, 20, 15, 10, 5, 1]
+            },
+            law: {
+                levels: ['#000000', '#1a1a1a', '#333333', '#4d4d4d', '#666666', '#808080', '#b3b3b3', '#d9d9d9'],
+                thresholds: [100, 75, 50, 30, 20, 10, 5, 1]
+            },
+            fleet: {
+                levels: ['#7f2600', '#a93200', '#d35400', '#e67e22', '#f39c12', '#f5b041', '#f8c471', '#fad7a0'],
+                thresholds: [60, 50, 40, 30, 20, 10, 5, 1]
+            }
+        };
+
+        const legendLabels = {
+            banking: ['200+ contacts', '150-199 contacts', '100-149 contacts', '50-99 contacts', '25-49 contacts', '10-24 contacts', '5-9 contacts', '1-4 contacts'],
+            manufacturing: ['150+ contacts', '100-149 contacts', '60-99 contacts', '40-59 contacts', '20-39 contacts', '10-19 contacts', '5-9 contacts', '1-4 contacts'],
+            food_beverage: ['100+ contacts', '75-99 contacts', '50-74 contacts', '30-49 contacts', '20-29 contacts', '10-19 contacts', '5-9 contacts', '1-4 contacts'],
+            hospice: ['50+ contacts', '40-49 contacts', '30-39 contacts', '20-29 contacts', '15-19 contacts', '10-14 contacts', '5-9 contacts', '1-4 contacts'],
+            law: ['100+ contacts', '75-99 contacts', '50-74 contacts', '30-49 contacts', '20-29 contacts', '10-19 contacts', '5-9 contacts', '1-4 contacts'],
+            fleet: ['60+ contacts', '50-59 contacts', '40-49 contacts', '30-39 contacts', '20-29 contacts', '10-19 contacts', '5-9 contacts', '1-4 contacts']
+        };
+
+        const industryMeta = {
+            banking: { icon: '🏦', name: 'Banking', color: '#0d47a1', entity: 'banks' },
+            manufacturing: { icon: '🏭', name: 'Manufacturing', color: '#b71c1c', entity: 'companies' },
+            food_beverage: { icon: '🍔', name: 'Food & Beverage', color: '#4a148c', entity: 'companies' },
+            hospice: { icon: '🏥', name: 'Hospice & Nursing', color: '#1b5e20', entity: 'organizations' },
+            law: { icon: '⚖️', name: 'Law Firms', color: '#1a1a1a', entity: 'law firms' },
+            fleet: { icon: '🚛', name: 'Fleet Operators', color: '#d35400', entity: 'operators' }
+        };
+
+        let currentIndustry = 'summary';
+        let seniorityChart = null;
+        let totalContactsChart = null;
+        let topStatesChart = null;
+        let currentZoom = 1;
+        const minZoom = 0.5;
+        const maxZoom = 3;
+        const zoomStep = 0.2;
+        let usMapData = null;
+
+        const stateNames = {
+            '01': 'Alabama', '02': 'Alaska', '04': 'Arizona', '05': 'Arkansas',
+            '06': 'California', '08': 'Colorado', '09': 'Connecticut', '10': 'Delaware',
+            '12': 'Florida', '13': 'Georgia', '15': 'Hawaii', '16': 'Idaho',
+            '17': 'Illinois', '18': 'Indiana', '19': 'Iowa', '20': 'Kansas',
+            '21': 'Kentucky', '22': 'Louisiana', '23': 'Maine', '24': 'Maryland',
+            '25': 'Massachusetts', '26': 'Michigan', '27': 'Minnesota', '28': 'Mississippi',
+            '29': 'Missouri', '30': 'Montana', '31': 'Nebraska', '32': 'Nevada',
+            '33': 'New Hampshire', '34': 'New Jersey', '35': 'New Mexico', '36': 'New York',
+            '37': 'North Carolina', '38': 'North Dakota', '39': 'Ohio', '40': 'Oklahoma',
+            '41': 'Oregon', '42': 'Pennsylvania', '44': 'Rhode Island', '45': 'South Carolina',
+            '46': 'South Dakota', '47': 'Tennessee', '48': 'Texas', '49': 'Utah',
+            '50': 'Vermont', '51': 'Virginia', '53': 'Washington', '54': 'West Virginia',
+            '55': 'Wisconsin', '56': 'Wyoming', '11': 'District of Columbia'
+        };
+
+        function getColor(contacts, industry) {
+            const scheme = colorSchemes[industry];
+            for (let i = 0; i < scheme.thresholds.length; i++) {
+                if (contacts >= scheme.thresholds[i]) {
+                    return scheme.levels[i];
+                }
+            }
+            return industryData[industry].bg;
+        }
+
+        function getTotalContacts(industry) {
+            const data = industryData[industry].stateDataInfo;
+            return Object.values(data).reduce((sum, s) => sum + s.contacts, 0);
+        }
+
+        function getTotalAccounts(industry) {
+            const data = industryData[industry].stateDataInfo;
+            return Object.values(data).reduce((sum, s) => sum + s.accounts, 0);
+        }
+
+        function getStateCount(industry) {
+            return Object.keys(industryData[industry].stateDataInfo).length;
+        }
+
+        // Summary Page Functions
+        function initSummaryPage() {
+            renderSummaryStats();
+            renderMiniMaps();
+            renderIndustryMixCharts();
+            renderTopStatesTable();
+        }
+
+        function renderSummaryStats() {
+            const container = document.getElementById('summaryStatsRow');
+            const industries = ['banking', 'manufacturing', 'food_beverage', 'hospice', 'law', 'fleet'];
+            
+            let html = '';
+            industries.forEach(ind => {
+                const meta = industryMeta[ind];
+                const contacts = getTotalContacts(ind);
+                const accounts = getTotalAccounts(ind);
+                html += `
+                    <div class="summary-stat-card" style="border-top-color: ${meta.color};">
+                        <div class="icon">${meta.icon}</div>
+                        <div class="label">${meta.name}</div>
+                        <div class="value" style="color: ${meta.color};">${contacts.toLocaleString()}</div>
+                        <div class="sub-value">${accounts} ${meta.entity}</div>
+                    </div>
+                `;
+            });
+            container.innerHTML = html;
+        }
+
+        function renderMiniMaps() {
+            const container = document.getElementById('mapsGrid');
+            const industries = ['banking', 'manufacturing', 'food_beverage', 'hospice', 'law', 'fleet'];
+            
+            let html = '';
+            industries.forEach(ind => {
+                const meta = industryMeta[ind];
+                const contacts = getTotalContacts(ind);
+                html += `
+                    <div class="mini-map-card" style="border-top-color: ${meta.color};">
+                        <div class="mini-map-header">
+                            <h3 style="color: ${meta.color};">${meta.icon} ${meta.name}</h3>
+                            <span class="contact-count" style="background: ${meta.color}; color: white;">${contacts.toLocaleString()} contacts</span>
+                        </div>
+                        <div class="mini-map-container">
+                            <svg id="minimap-${ind}"></svg>
+                        </div>
+                    </div>
+                `;
+            });
+            container.innerHTML = html;
+
+            // Render each mini map after DOM is ready
+            if (usMapData) {
+                industries.forEach(ind => renderMiniMap(ind));
+            }
+        }
+
+        function renderMiniMap(industry) {
+            if (!usMapData) return;
+
+            const svg = d3.select(`#minimap-${industry}`);
+            const width = 280;
+            const height = 180;
+            
+            svg.attr("width", width).attr("height", height);
+            svg.selectAll("*").remove();
+
+            const states = topojson.feature(usMapData, usMapData.objects.states).features;
+            const projection = d3.geoAlbersUsa().fitSize([width, height], topojson.feature(usMapData, usMapData.objects.nation));
+            const path = d3.geoPath().projection(projection);
+
+            svg.selectAll(".state")
+                .data(states)
+                .enter()
+                .append("path")
+                .attr("class", "state")
+                .attr("d", path)
+                .attr("fill", d => {
+                    const stateName = stateNames[String(d.id).padStart(2, '0')];
+                    const data = industryData[industry].stateDataInfo[stateName];
+                    return data ? getColor(data.contacts, industry) : industryData[industry].bg;
+                })
+                .attr("stroke", "white")
+                .attr("stroke-width", 0.5);
+        }
+
+        function renderIndustryMixCharts() {
+            // Total Contacts Pie Chart
+            const industries = ['banking', 'manufacturing', 'food_beverage', 'hospice', 'law', 'fleet'];
+            const contacts = industries.map(i => getTotalContacts(i));
+            const colors = industries.map(i => industryMeta[i].color);
+            const labels = industries.map(i => industryMeta[i].name);
+
+            if (totalContactsChart) totalContactsChart.destroy();
+            const ctx1 = document.getElementById('totalContactsChart').getContext('2d');
+            totalContactsChart = new Chart(ctx1, {
+                type: 'doughnut',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        data: contacts,
+                        backgroundColor: colors,
+                        borderWidth: 2,
+                        borderColor: '#fff'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'right' },
+                        title: { display: true, text: 'Total Contacts by Industry', font: { size: 14 } }
+                    }
+                }
+            });
+
+            // Top States Stacked Bar Chart
+            const allStates = {};
+            industries.forEach(ind => {
+                Object.entries(industryData[ind].stateDataInfo).forEach(([state, data]) => {
+                    if (!allStates[state]) allStates[state] = { total: 0 };
+                    allStates[state][ind] = data.contacts;
+                    allStates[state].total += data.contacts;
+                });
+            });
+
+            const topStates = Object.entries(allStates)
+                .sort((a, b) => b[1].total - a[1].total)
+                .slice(0, 10);
+
+            const datasets = industries.map(ind => ({
+                label: industryMeta[ind].name,
+                data: topStates.map(([state, data]) => data[ind] || 0),
+                backgroundColor: industryMeta[ind].color
+            }));
+
+            if (topStatesChart) topStatesChart.destroy();
+            const ctx2 = document.getElementById('topStatesChart').getContext('2d');
+            topStatesChart = new Chart(ctx2, {
+                type: 'bar',
+                data: {
+                    labels: topStates.map(([state]) => state),
+                    datasets: datasets
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: { stacked: true },
+                        y: { stacked: true, title: { display: true, text: 'Total Contacts' } }
+                    },
+                    plugins: {
+                        legend: { position: 'bottom' },
+                        title: { display: true, text: 'Top 10 States - Industry Breakdown', font: { size: 14 } }
+                    }
+                }
+            });
+        }
+
+        function renderTopStatesTable() {
+            const industries = ['banking', 'manufacturing', 'food_beverage', 'hospice', 'law', 'fleet'];
+            
+            // Aggregate all state data
+            const allStates = {};
+            industries.forEach(ind => {
+                Object.entries(industryData[ind].stateDataInfo).forEach(([state, data]) => {
+                    if (!allStates[state]) {
+                        allStates[state] = { total: 0, banking: 0, manufacturing: 0, food_beverage: 0, hospice: 0, law: 0, fleet: 0 };
+                    }
+                    allStates[state][ind] = data.contacts;
+                    allStates[state].total += data.contacts;
+                });
+            });
+
+            const topStates = Object.entries(allStates)
+                .sort((a, b) => b[1].total - a[1].total)
+                .slice(0, 15);
+
+            const tbody = document.getElementById('topStatesTableBody');
+            let html = '';
+
+            topStates.forEach(([state, data], index) => {
+                const rankClass = index === 0 ? 'gold' : index === 1 ? 'silver' : index === 2 ? 'bronze' : '';
+                
+                // Calculate percentage bar
+                const barSegments = industries.map(ind => {
+                    const pct = (data[ind] / data.total * 100).toFixed(1);
+                    return `<div class="industry-bar-segment" style="width: ${pct}%; background: ${industryMeta[ind].color};" title="${industryMeta[ind].name}: ${data[ind]}"></div>`;
+                }).join('');
+
+                html += `
+                    <tr>
+                        <td><div class="rank-badge ${rankClass}">${index + 1}</div></td>
+                        <td><strong>${state}</strong></td>
+                        <td><strong>${data.total.toLocaleString()}</strong></td>
+                        <td><div class="industry-bar">${barSegments}</div></td>
+                        <td>${data.banking || '-'}</td>
+                        <td>${data.manufacturing || '-'}</td>
+                        <td>${data.food_beverage || '-'}</td>
+                        <td>${data.hospice || '-'}</td>
+                        <td>${data.law || '-'}</td>
+                        <td>${data.fleet || '-'}</td>
+                    </tr>
+                `;
+            });
+
+            tbody.innerHTML = html;
+        }
+
+        // Industry-specific functions
+        function updateColors(industry) {
+            const data = industryData[industry];
+            document.documentElement.style.setProperty('--primary-color', data.color1);
+            document.documentElement.style.setProperty('--secondary-color', data.color2);
+            document.documentElement.style.setProperty('--highlight-color', data.highlight);
+            document.documentElement.style.setProperty('--bg-color', data.bg);
+        }
+
+        function updateLegend(industry) {
+            const scheme = colorSchemes[industry];
+            const labels = legendLabels[industry];
+            let html = '';
+            for (let i = 0; i < scheme.levels.length; i++) {
+                html += `<div class="legend-item">
+                    <div class="legend-color" style="background: ${scheme.levels[i]};"></div>
+                    <span>${labels[i]}</span>
+                </div>`;
+            }
+            document.getElementById('legendItems').innerHTML = html;
+        }
+
+        function updateStateList(industry) {
+            const data = industryData[industry];
+            const stateList = document.getElementById('stateList');
+            const sortedStates = Object.entries(data.stateDataInfo)
+                .sort((a, b) => b[1].contacts - a[1].contacts)
+                .slice(0, 15);
+
+            stateList.innerHTML = '';
+            sortedStates.forEach(([state, stateData], index) => {
+                const item = document.createElement('div');
+                item.className = 'state-item';
+                item.innerHTML = `
+                    <strong>${index + 1}. ${state}</strong>
+                    <small><span style="color: var(--primary-color); font-weight: 600;">${stateData.contacts}</span> contacts | ${stateData.accounts} ${industryMeta[industry].entity}</small>
+                `;
+                item.onclick = () => openStateModal(state);
+                stateList.appendChild(item);
+            });
+
+            document.getElementById('topStatesTitle').textContent = `${industryMeta[industry].icon} Top States`;
+        }
+
+        function updateStatsBox(industry) {
+            document.getElementById('statsBox').innerHTML = industryData[industry].stats;
+        }
+
+        function updateHeader(industry) {
+            if (industry === 'summary') {
+                document.getElementById('dashboardTitle').textContent = '📊 CRM Analytics Dashboard - All Industries';
+                document.getElementById('dashboardDesc').textContent = 'Compare lead density across all 6 industries to identify optimal sales team placement';
+            } else {
+                const data = industryData[industry];
+                document.getElementById('dashboardTitle').textContent = `${data.label} CRM Analytics Dashboard`;
+                document.getElementById('dashboardDesc').textContent = data.description;
+            }
+        }
+
+        function updateChart(industry) {
+            const chartConfig = industryData[industry].chartsConfig.seniority;
+            if (seniorityChart) seniorityChart.destroy();
+
+            const ctx = document.getElementById('seniorityChart').getContext('2d');
+            seniorityChart = new Chart(ctx, {
+                type: 'bar',
+                data: chartConfig,
+                options: {
+                    indexAxis: 'x',
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: { stacked: true, title: { display: true, text: 'State' } },
+                        y: { stacked: true, max: 100, title: { display: true, text: 'Seniority Level (%)' } }
+                    },
+                    plugins: {
+                        legend: { position: 'bottom', labels: { font: { size: 11 } } }
+                    }
+                }
+            });
+        }
+
+        function updateMap(industry) {
+            const data = industryData[industry];
+            const svg = d3.select("#heatmap-svg");
+            
+            svg.selectAll(".state")
+                .attr("fill", function(d) {
+                    const stateName = stateNames[String(d.id).padStart(2, '0')];
+                    const stateData = data.stateDataInfo[stateName];
+                    return stateData ? getColor(stateData.contacts, industry) : data.bg;
+                });
+        }
+
+        function switchIndustry(industry) {
+            document.getElementById('loadingOverlay').classList.add('active');
+            
+            setTimeout(() => {
+                currentIndustry = industry;
+                
+                // Hide all content
+                document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+                document.querySelectorAll('.tab-button').forEach(el => el.classList.remove('active'));
+                
+                if (industry === 'summary') {
+                    // Show summary page
+                    document.getElementById('summary').classList.add('active');
+                    document.getElementById('industryTabs').style.display = 'none';
+                    
+                    // Reset colors to default
+                    document.documentElement.style.setProperty('--primary-color', '#2c3e50');
+                    document.documentElement.style.setProperty('--secondary-color', '#34495e');
+                    document.documentElement.style.setProperty('--highlight-color', '#ecf0f1');
+                    document.documentElement.style.setProperty('--bg-color', '#f5f6fa');
+                    
+                    updateHeader('summary');
+                    initSummaryPage();
+                } else {
+                    // Show industry-specific pages
+                    document.getElementById('industryTabs').style.display = 'flex';
+                    document.getElementById('charts').classList.add('active');
+                    document.querySelector('.tab-button').classList.add('active');
+                    
+                    updateColors(industry);
+                    updateHeader(industry);
+                    updateLegend(industry);
+                    updateStateList(industry);
+                    updateStatsBox(industry);
+                    updateChart(industry);
+                    updateMap(industry);
+                }
+                
+                document.getElementById('loadingOverlay').classList.remove('active');
+            }, 150);
+        }
+
+        function switchTab(tabName) {
+            document.querySelectorAll('.tab-content').forEach(tab => {
+                if (tab.id !== 'summary') tab.classList.remove('active');
+            });
+            document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
+            document.getElementById(tabName).classList.add('active');
+            event.target.classList.add('active');
+
+            if (tabName === 'charts' && seniorityChart) {
+                setTimeout(() => seniorityChart.resize(), 100);
+            }
+        }
+
+        function openStateModal(stateName) {
+            if (currentIndustry === 'summary') return;
+            
+            const data = industryData[currentIndustry];
+            const accounts = data.stateAccountsData[stateName] || [];
+            const stateData = data.stateDataInfo[stateName] || { contacts: 0, accounts: 0 };
+
+            document.getElementById('modalStateName').textContent = stateName;
+            document.getElementById('accountsTitle').textContent = `🏆 Top 5 ${industryMeta[currentIndustry].entity.charAt(0).toUpperCase() + industryMeta[currentIndustry].entity.slice(1)} by Contacts`;
+
+            document.getElementById('stateSummary').innerHTML = `
+                <div class="summary-stat"><span>Total Contacts:</span><strong>${stateData.contacts}</strong></div>
+                <div class="summary-stat"><span>Total ${industryMeta[currentIndustry].entity.charAt(0).toUpperCase() + industryMeta[currentIndustry].entity.slice(1)}:</span><strong>${stateData.accounts}</strong></div>
+                <div class="summary-stat"><span>Avg Contacts:</span><strong>${(stateData.contacts / stateData.accounts).toFixed(1)}</strong></div>
+            `;
+
+            document.getElementById('accountsList').innerHTML = accounts.map((acc, i) => `
+                <div class="account-card">
+                    <div class="account-name">${i + 1}. ${acc.name}</div>
+                    <div class="account-details">
+                        <div class="detail-item"><span class="detail-label">Contacts:</span><span class="detail-value">${acc.contacts}</span></div>
+                        <div class="detail-item"><span class="detail-label">Employees:</span><span class="detail-value">${acc.employees.toLocaleString()}</span></div>
+                    </div>
+                </div>
+            `).join('');
+
+            document.getElementById('stateModal').classList.add('active');
+        }
+
+        function closeModal() {
+            document.getElementById('stateModal').classList.remove('active');
+        }
+
+        window.onclick = function(event) {
+            const modal = document.getElementById('stateModal');
+            if (event.target === modal) modal.classList.remove('active');
+        };
+
+        function zoomMapIn() {
+            if (currentZoom < maxZoom) { currentZoom += zoomStep; applyZoom(); }
+        }
+
+        function zoomMapOut() {
+            if (currentZoom > minZoom) { currentZoom -= zoomStep; applyZoom(); }
+        }
+
+        function resetMap() {
+            currentZoom = 1;
+            applyZoom();
+        }
+
+        function applyZoom() {
+            const svg = document.getElementById('heatmap-svg');
+            svg.style.transform = `scale(${currentZoom})`;
+            svg.style.transformOrigin = 'top center';
+            svg.style.transition = 'transform 0.3s ease';
+            document.getElementById('zoomInBtn').style.opacity = currentZoom >= maxZoom ? '0.5' : '1';
+            document.getElementById('zoomOutBtn').style.opacity = currentZoom <= minZoom ? '0.5' : '1';
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            // Load US map data
+            d3.json("https://cdn.jsdelivr.net/npm/us-atlas@3/states-10m.json").then(us => {
+                usMapData = us;
+                
+                // Initialize main map
+                const width = 960, height = 600;
+                const svg = d3.select("#heatmap-svg").attr("width", width).attr("height", height);
+                const states = topojson.feature(us, us.objects.states).features;
+                const projection = d3.geoAlbersUsa().fitSize([width, height], topojson.feature(us, us.objects.nation));
+                const path = d3.geoPath().projection(projection);
+
+                svg.selectAll(".state")
+                    .data(states)
+                    .enter()
+                    .append("path")
+                    .attr("class", "state")
+                    .attr("d", path)
+                    .attr("fill", "#ccc")
+                    .on("mouseover", function(event, d) {
+                        if (currentIndustry === 'summary') return;
+                        const stateName = stateNames[String(d.id).padStart(2, '0')];
+                        const data = industryData[currentIndustry].stateDataInfo[stateName];
+                        if (data) {
+                            const tooltip = document.getElementById('tooltip');
+                            tooltip.style.display = 'block';
+                            tooltip.style.left = (event.pageX + 10) + 'px';
+                            tooltip.style.top = (event.pageY + 10) + 'px';
+                            tooltip.innerHTML = `<strong>${stateName}</strong><br/><strong>Contacts:</strong> ${data.contacts}<br/><strong>${industryMeta[currentIndustry].entity.charAt(0).toUpperCase() + industryMeta[currentIndustry].entity.slice(1)}:</strong> ${data.accounts}<br/><em>Click to see top 5</em>`;
+                        }
+                    })
+                    .on("mousemove", function(event) {
+                        const tooltip = document.getElementById('tooltip');
+                        tooltip.style.left = (event.pageX + 10) + 'px';
+                        tooltip.style.top = (event.pageY + 10) + 'px';
+                    })
+                    .on("mouseout", function() { document.getElementById('tooltip').style.display = 'none'; })
+                    .on("click", function(event, d) {
+                        if (currentIndustry === 'summary') return;
+                        const stateName = stateNames[String(d.id).padStart(2, '0')];
+                        if (industryData[currentIndustry].stateDataInfo[stateName]) openStateModal(stateName);
+                    });
+
+                // Initialize with summary page
+                switchIndustry('summary');
+                document.getElementById('zoomOutBtn').style.opacity = '0.5';
+            });
+        });
+
+    </script>
+</body>
+</html>
