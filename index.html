@@ -108,47 +108,6 @@
             padding: 10px;
         }
 
-        .tabs {
-            background: white;
-            border-bottom: 2px solid #e0e0e0;
-            padding: 0;
-            display: flex;
-            height: 50px;
-        }
-
-        .tab-button {
-            flex: 1;
-            border: none;
-            background: white;
-            cursor: pointer;
-            font-size: 14px;
-            font-weight: 500;
-            color: #666;
-            transition: all 0.3s;
-            border-bottom: 3px solid transparent;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-        }
-
-        .tab-button:hover {
-            background: var(--highlight-color);
-            color: var(--primary-color);
-        }
-
-        .tab-button.active {
-            color: var(--primary-color);
-            border-bottom-color: var(--secondary-color);
-            background: var(--highlight-color);
-        }
-
-        .content {
-            flex: 1;
-            overflow: hidden;
-            display: flex;
-        }
-
         .tab-content {
             display: none;
             flex: 1;
@@ -161,46 +120,12 @@
             flex-direction: column;
         }
 
-        .charts-container {
-            display: flex;
-            flex-direction: column;
-            gap: 20px;
-            padding: 20px;
-            width: 100%;
-	    height: 500px;
-            overflow-y: auto;
-        }
-
-        .chart-wrapper {
-            background: white;
-            border-radius: 8px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-            padding: 20px;
-            flex: 1;
-            min-height: 400px;
-            position: relative;
-        }
-
-        .chart-title {
-            font-size: 16px;
-            font-weight: 600;
-            color: var(--primary-color);
-            margin-bottom: 15px;
-            border-bottom: 2px solid #e0e0e0;
-            padding-bottom: 10px;
-            transition: color 0.3s;
-        }
-
-        canvas {
-            max-height: 100%;
-            width: 100% !important;
-        }
-
         .heatmap-container {
             display: flex;
             gap: 20px;
             padding: 20px;
             width: 100%;
+            flex: 1;
         }
 
         .map-section {
@@ -211,6 +136,16 @@
             padding: 20px;
             display: flex;
             flex-direction: column;
+        }
+
+        .chart-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--primary-color);
+            margin-bottom: 15px;
+            border-bottom: 2px solid #e0e0e0;
+            padding-bottom: 10px;
+            transition: color 0.3s;
         }
 
         .state {
@@ -808,15 +743,6 @@
             </div>
         </div>
 
-        <div class="tabs" id="industryTabs" style="display: none;">
-            <button class="tab-button active" onclick="switchTab('charts')">
-                📈 Seniority Distribution Chart
-            </button>
-            <button class="tab-button" onclick="switchTab('heatmap')">
-                🗺️ State Heat Map
-            </button>
-        </div>
-
         <!-- Summary Page -->
         <div id="summary" class="tab-content active">
             <div class="summary-content">
@@ -868,16 +794,7 @@
             </div>
         </div>
 
-        <!-- Individual Industry Views -->
-        <div id="charts" class="tab-content">
-            <div class="charts-container">
-                <div class="chart-wrapper">
-                    <div class="chart-title">Seniority Level Distribution by State (%)</div>
-                    <canvas id="seniorityChart"></canvas>
-                </div>
-            </div>
-        </div>
-
+        <!-- Individual Industry Heat Map View -->
         <div id="heatmap" class="tab-content">
             <div class="heatmap-container">
                 <div class="map-section">
@@ -890,8 +807,7 @@
                         </div>
                     </div>
                     <div class="svg-container">
-                        <svg id="heatmap-svg" viewBox="0 0 960 600" preserveAspectRatio="xMinYMin meet">
-    </svg>
+                        <svg id="heatmap-svg" viewBox="0 0 960 600" preserveAspectRatio="xMinYMin meet"></svg>
                     </div>
                     <div class="tooltip" id="tooltip"></div>
                 </div>
@@ -929,7 +845,6 @@
     </div>
 
     <script>
-
 const industryData = {
     "banking": {
         label: "🏦 Banking",
@@ -2847,8 +2762,6 @@ const industryData = {
 };
 
 
-
-
         // Color schemes for each industry
         const colorSchemes = {
             banking: {
@@ -2896,7 +2809,6 @@ const industryData = {
         };
 
         let currentIndustry = 'summary';
-        let seniorityChart = null;
         let totalContactsChart = null;
         let topStatesChart = null;
         let currentZoom = 1;
@@ -2996,7 +2908,6 @@ const industryData = {
             });
             container.innerHTML = html;
 
-            // Render each mini map after DOM is ready
             if (usMapData) {
                 industries.forEach(ind => renderMiniMap(ind));
             }
@@ -3032,7 +2943,6 @@ const industryData = {
         }
 
         function renderIndustryMixCharts() {
-            // Total Contacts Pie Chart
             const industries = ['banking', 'manufacturing', 'food_beverage', 'hospice', 'law', 'fleet'];
             const contacts = industries.map(i => getTotalContacts(i));
             const colors = industries.map(i => industryMeta[i].color);
@@ -3061,7 +2971,6 @@ const industryData = {
                 }
             });
 
-            // Top States Stacked Bar Chart
             const allStates = {};
             industries.forEach(ind => {
                 Object.entries(industryData[ind].stateDataInfo).forEach(([state, data]) => {
@@ -3107,7 +3016,6 @@ const industryData = {
         function renderTopStatesTable() {
             const industries = ['banking', 'manufacturing', 'food_beverage', 'hospice', 'law', 'fleet'];
             
-            // Aggregate all state data
             const allStates = {};
             industries.forEach(ind => {
                 Object.entries(industryData[ind].stateDataInfo).forEach(([state, data]) => {
@@ -3129,7 +3037,6 @@ const industryData = {
             topStates.forEach(([state, data], index) => {
                 const rankClass = index === 0 ? 'gold' : index === 1 ? 'silver' : index === 2 ? 'bronze' : '';
                 
-                // Calculate percentage bar
                 const barSegments = industries.map(ind => {
                     const pct = (data[ind] / data.total * 100).toFixed(1);
                     return `<div class="industry-bar-segment" style="width: ${pct}%; background: ${industryMeta[ind].color};" title="${industryMeta[ind].name}: ${data[ind]}"></div>`;
@@ -3154,7 +3061,6 @@ const industryData = {
             tbody.innerHTML = html;
         }
 
-        // Industry-specific functions
         function updateColors(industry) {
             const data = industryData[industry];
             document.documentElement.style.setProperty('--primary-color', data.color1);
@@ -3213,29 +3119,6 @@ const industryData = {
             }
         }
 
-        function updateChart(industry) {
-            const chartConfig = industryData[industry].chartsConfig.seniority;
-            if (seniorityChart) seniorityChart.destroy();
-
-            const ctx = document.getElementById('seniorityChart').getContext('2d');
-            seniorityChart = new Chart(ctx, {
-                type: 'bar',
-                data: chartConfig,
-                options: {
-                    indexAxis: 'x',
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    scales: {
-                        x: { stacked: true, title: { display: true, text: 'State' } },
-                        y: { stacked: true, max: 100, title: { display: true, text: 'Seniority Level (%)' } }
-                    },
-                    plugins: {
-                        legend: { position: 'bottom', labels: { font: { size: 11 } } }
-                    }
-                }
-            });
-        }
-
         function updateMap(industry) {
             const data = industryData[industry];
             const svg = d3.select("#heatmap-svg");
@@ -3254,16 +3137,11 @@ const industryData = {
             setTimeout(() => {
                 currentIndustry = industry;
                 
-                // Hide all content
                 document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
-                document.querySelectorAll('.tab-button').forEach(el => el.classList.remove('active'));
                 
                 if (industry === 'summary') {
-                    // Show summary page
                     document.getElementById('summary').classList.add('active');
-                    document.getElementById('industryTabs').style.display = 'none';
                     
-                    // Reset colors to default
                     document.documentElement.style.setProperty('--primary-color', '#2c3e50');
                     document.documentElement.style.setProperty('--secondary-color', '#34495e');
                     document.documentElement.style.setProperty('--highlight-color', '#ecf0f1');
@@ -3272,35 +3150,18 @@ const industryData = {
                     updateHeader('summary');
                     initSummaryPage();
                 } else {
-                    // Show industry-specific pages
-                    document.getElementById('industryTabs').style.display = 'flex';
-                    document.getElementById('charts').classList.add('active');
-                    document.querySelector('.tab-button').classList.add('active');
+                    document.getElementById('heatmap').classList.add('active');
                     
                     updateColors(industry);
                     updateHeader(industry);
                     updateLegend(industry);
                     updateStateList(industry);
                     updateStatsBox(industry);
-                    updateChart(industry);
                     updateMap(industry);
                 }
                 
                 document.getElementById('loadingOverlay').classList.remove('active');
             }, 150);
-        }
-
-        function switchTab(tabName) {
-            document.querySelectorAll('.tab-content').forEach(tab => {
-                if (tab.id !== 'summary') tab.classList.remove('active');
-            });
-            document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
-            document.getElementById(tabName).classList.add('active');
-            event.target.classList.add('active');
-
-            if (tabName === 'charts' && seniorityChart) {
-                setTimeout(() => seniorityChart.resize(), 100);
-            }
         }
 
         function openStateModal(stateName) {
@@ -3365,11 +3226,9 @@ const industryData = {
 
         // Initialize
         document.addEventListener('DOMContentLoaded', function() {
-            // Load US map data
             d3.json("https://cdn.jsdelivr.net/npm/us-atlas@3/states-10m.json").then(us => {
                 usMapData = us;
                 
-                // Initialize main map
                 const width = 960, height = 600;
                 const svg = d3.select("#heatmap-svg").attr("width", width).attr("height", height);
                 const states = topojson.feature(us, us.objects.states).features;
@@ -3407,7 +3266,6 @@ const industryData = {
                         if (industryData[currentIndustry].stateDataInfo[stateName]) openStateModal(stateName);
                     });
 
-                // Initialize with summary page
                 switchIndustry('summary');
                 document.getElementById('zoomOutBtn').style.opacity = '0.5';
             });
